@@ -12,7 +12,9 @@ log
 *.bak
 *-bak
 *bak.py
-tools/
+tools/venv
+tools/k2
+tools/fairseq
 # Ignore Mac system files
 .DS_store
 
