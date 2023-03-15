@@ -15,10 +15,7 @@ log
 tools/venv
 tools/k2
 tools/fairseq
-<<<<<<< HEAD
 activate_python.sh
-=======
->>>>>>> 513d5b1e617016a17da5157375cc07452826840b
 # Ignore Mac system files
 .DS_store
 
