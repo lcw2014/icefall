@@ -16,6 +16,7 @@ tools/venv
 tools/k2
 tools/fairseq
 activate_python.sh
+tools/Miniconda*.sh
 # Ignore Mac system files
 .DS_store
 
