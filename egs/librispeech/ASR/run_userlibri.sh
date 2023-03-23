@@ -714,3 +714,57 @@ if [ $stage -le 15 ] && [ $stop_stage -ge 15 ]; then
     done
   done
 fi
+
+if [ $stage -le 16 ] && [ $stop_stage -ge 16 ]; then
+  echo "Stage 16: train per spk id"
+
+  filename="data/id_to_books.txt"
+  result_path="/home/lee/Workspace/icefall/egs/librispeech/ASR/pruned_transducer_stateless5/results_per_spkid.txt"
+  if [ -f $result_path ]; then rm $result_path; fi
+
+  while read line; do
+    # echo $line
+    spk_id=$(echo "$line" | cut -f1)
+    book_ids=$(echo "$line" | cut -f2-)
+    echo $spk_id
+    echo $book_ids
+    num=$(echo $book_ids | grep -o -E "[0-9]+")
+    echo $num
+    ./rnn_lm/train_plm_perid.py \
+      --start-epoch 31 \
+      --world-size 4 \
+      --num-epochs 40 \
+      --use-fp16 0 \
+      --embedding-dim 2048 \
+      --hidden-dim 2048 \
+      --num-layers 3 \
+      --batch-size 100 \
+      --exp-dir rnn_lm/exp \
+      --train-n-layer 4 \
+      --save-last-epoch true \
+      --lm-data-path data/lm_training_bpe_500_userlibri \
+      --lm-data-name "$num"
+      #--lm-data-path data/lm_training_bpe_500_userlibri/sorted_lm_data_$num.pt \
+
+    ./pruned_transducer_stateless5/decode_userlibri_perid.py \
+      --epoch 30 \
+      --avg 15 \
+      --exp-dir ./pruned_transducer_stateless5/exp_layer12 \
+      --max-duration 400 \
+      --decoding-method modified_beam_search_lm_shallow_fusion \
+      --beam-size 4 \
+      --num-encoder-layer 12 \
+      --lm-type rnn \
+      --lm-scale 0.3 \
+      --lm-exp-dir rnn_lm/exp \
+      --lm-epoch 39 \
+      --lm-avg 1 \
+      --rnn-lm-num-layers 3 \
+      --use-shallow-fusion 1 \
+      --rnn-lm-tie-weights 1 \
+      --surplus-layer true \
+      --test-id "$book_ids" \
+      --spk-id "$spk_id" \
+      --result-path $result_path
+  done < "$filename"
+fi
