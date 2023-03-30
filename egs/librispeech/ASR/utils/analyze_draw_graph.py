@@ -5,29 +5,58 @@ import numpy as np
 from collections import OrderedDict
 
 
-file_list = [
-    # 'results_baseline.txt', # baseline
-    # 'results_scheme0.txt', # 0
-    # 'result_surplus_random_init_only.txt', # 1-1
-    # 'result_surplus_copy_last_only.txt', # 1-2
-    # 'result_last_layer.txt', # 2
-    # 'result_adapter.txt', # 3-1
-    # 'result_adapter_16.txt', # 3-2
-    'result_whole-layer_40epochs.txt',
-    'result_whole-layer_45epochs.txt',
-    'result_average_whole-layers_train-extra.txt',
-    'result_average_whole-layers.txt',
-]
+# file_list = [
+#     # 'results_baseline.txt', # baseline
+#     # 'results_scheme0.txt', # 0
+#     # 'result_surplus_random_init_only.txt', # 1-1
+#     # 'result_surplus_copy_last_only.txt', # 1-2
+#     # 'result_last_layer.txt', # 2
+#     # 'result_adapter.txt', # 3-1
+#     # 'result_adapter_16.txt', # 3-2
+#     # 'result_whole-layer_40epochs.txt',
+#     # 'result_whole-layer_45epochs.txt',
+#     # 'result_average_whole-layers_train-extra.txt',
+#     # 'result_average_whole-layers.txt',
+#     'results_per_spkid_baseline.txt',
+#     'results_per_spkid.txt'
+# ]
 
-dir_path = 'pruned_transducer_stateless5'
-results = OrderedDict()
-for i, file in enumerate(file_list):
-    data_path = PATH.join(dir_path, file)
-    with open(data_path) as f:
-        data = [float(t.strip().split('\t')[1]) for t in  f.readlines()]
-    results[file.split('.')[0]] = np.array(data)
+file_list1 = []
+file_list2 = []
 
-print(results.keys())
+for i in range(5,31):
+    file_list1.append(f'plm_average_topk_userlibri_{i}.txt')
+    file_list2.append(f'plm_average_topk{i}.txt')
+dir_path = 'pruned_transducer_stateless5/results'
+# results = OrderedDict()
+# for i, file in enumerate(file_list):
+#     data_path = PATH.join(dir_path, file)
+#     with open(data_path) as f:
+#         data = [float(t.strip().split('\t')[1]) for t in  f.readlines()]
+#     results[file.split('.')[0]] = np.array(data)
+result1 = OrderedDict()
+result2 = OrderedDict()
+for i, file in enumerate(zip(file_list1,file_list2)):
+    file1, file2 = file[0], file[1]
+    data_path1 = PATH.join(dir_path, file1)
+    data_path2 = PATH.join(dir_path, file2)
+    with open(data_path1) as f1, open(data_path2) as f2:
+        data1 = [float(t.strip().split('\t')[1]) for t in  f1.readlines()]
+        data2 = [float(t.strip().split('\t')[1]) for t in  f2.readlines()]
+
+    result1[file1.split('.')[0]] = np.average(np.array(data1))
+    result2[file2.split('.')[0]] = np.average(np.array(data2))
+print(result1.values())
+plt.figure()
+x = np.arange(5,31)
+plt.plot(x,result1.values(),label='average and train')
+plt.plot(x,result2.values(),label='average')
+plt.ylabel('WER')
+plt.xlabel('The number of averaged models')
+plt.legend()
+plt.savefig(PATH.join(dir_path, 'Averaged PLM results.png'))
+exit()
+# print(results.keys())
 
 ax1 = plt.figure(1,dpi=100)
 keys = results.keys()
@@ -38,8 +67,8 @@ plt.xticks(np.arange(1,len(file_list)+1), [
     # 'baseline',
     # '0',
     # '1-1',
-    '1-2',
-    '2',
+    # '1-2',
+    # '2',
     '3-1',
     '3-2'])
 plt.ylabel('WER')

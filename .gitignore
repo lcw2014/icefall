@@ -6,6 +6,7 @@ path.sh
 exp
 exp*/
 *.pt
+*.png
 download
 dask-worker-space
 log
