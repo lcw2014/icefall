@@ -53,7 +53,7 @@ done
 	--input-strategy AudioSamples \
 	--enable-spec-aug False \
 	--additional-block True \
-	--model-name d2v-base-T.pt \
+	--model-name libri_prefinetuned.pt \
 	--exp-dir ./pruned_transducer_stateless_d2v_v2/exp \
 	--max-duration 400 \
 	--decoding-method modified_beam_search_lm_shallow_fusion \
@@ -69,7 +69,7 @@ done
 	--lm-avg 1 \
 	--rnn-lm-num-layers 3 \
 	--use-shallow-fusion 1 \
-	--rnn-lm-tie-weights 1 \
+	--rnn-lm-tie-weights 1
 """
 
 

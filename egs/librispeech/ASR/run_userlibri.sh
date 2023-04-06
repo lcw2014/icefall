@@ -594,23 +594,23 @@ if [ $stage -le 14 ] && [ $stop_stage -ge 14 ]; then
   if [ -f $result_path ]; then rm $result_path; fi
   for id in ${ids[@]}; do
 
-    # num=$(echo $id | grep -o -E "[0-9]+")
-    # if [ ! -d rnn_lm/exp_$id ]; then mkdir -p rnn_lm/exp_$id; fi
-    # cp rnn_lm/exp/epoch-30.pt rnn_lm/exp_$id/epoch-30.pt
+    num=$(echo $id | grep -o -E "[0-9]+")
+    if [ ! -d rnn_lm/exp_$id ]; then mkdir -p rnn_lm/exp_$id; fi
+    cp rnn_lm/exp/epoch-30.pt rnn_lm/exp_$id/epoch-30.pt
 
-    # ./rnn_lm/train_plm.py \
-    #   --start-epoch 31 \
-    #   --world-size 4 \
-    #   --num-epochs 35 \
-    #   --use-fp16 0 \
-    #   --embedding-dim 2048 \
-    #   --hidden-dim 2048 \
-    #   --num-layers 3 \
-    #   --batch-size 100 \
-    #   --exp-dir rnn_lm/exp_$id \
-    #   --save-last-epoch true \
-    #   --lm-data data/lm_training_bpe_500_userlibri/sorted_lm_data_$num.pt || (echo "ERROR OCCURs" && echo $id >> data/error_id.txt)
-    # if [ -f rnn_lm/exp_$id/epoch-30.pt ]; then rm rnn_lm/exp_$id/epoch-30.pt; fi
+    ./rnn_lm/train_plm.py \
+      --start-epoch 31 \
+      --world-size 4 \
+      --num-epochs 35 \
+      --use-fp16 0 \
+      --embedding-dim 2048 \
+      --hidden-dim 2048 \
+      --num-layers 3 \
+      --batch-size 100 \
+      --exp-dir rnn_lm/exp_$id \
+      --save-last-epoch true \
+      --lm-data data/lm_training_bpe_500_userlibri/sorted_lm_data_$num.pt || (echo "ERROR OCCURs" && echo $id >> data/error_id.txt)
+    if [ -f rnn_lm/exp_$id/epoch-30.pt ]; then rm rnn_lm/exp_$id/epoch-30.pt; fi
     
     ./pruned_transducer_stateless5/decode_userlibri.py \
       --epoch 30 \
@@ -802,4 +802,108 @@ if [ $stage -le 16 ] && [ $stop_stage -ge 16 ]; then
       --spk-id "$spk_id" \
       --result-path $result_path2
   done < "$filename"
+fi
+
+if [ $stage -le 17 ] && [ $stop_stage -ge 17 ]; then
+  echo "Stage 17: train per spk id with MAML fed"
+
+  filename="data/id_to_books.txt"
+
+  for epoch in 35 40 45 50; do
+    result_path=/home/lee/Workspace/icefall/egs/librispeech/ASR/pruned_transducer_stateless5/results_per_spkid_fed_"$epoch"_test.txt
+    result_path2=/home/lee/Workspace/icefall/egs/librispeech/ASR/pruned_transducer_stateless5/results_per_spkid_fed_"$epoch"_avg_test.txt
+
+    if [ -f $result_path ]; then rm $result_path; fi
+    if [ -f $result_path2 ]; then rm $result_path2; fi
+    while read line; do
+      # echo $line
+      spk_id=$(echo "$line" | cut -f1)
+      book_ids=$(echo "$line" | cut -f2-)
+      echo $spk_id
+      echo $book_ids
+      num=$(echo $book_ids | grep -o -E "[0-9]+")
+      echo $num
+      if [ ! -d rnn_lm/exp_$spk_id ]; then mkdir -p rnn_lm/exp_$spk_id; fi
+      cp rnn_lm/exp_fed/epoch-$((epoch-5)).pt rnn_lm/exp_"$spk_id"/epoch-$((epoch-5)).pt
+
+      ./rnn_lm/train_plm_fed_perid.py \
+        --start-epoch $((epoch-4)) \
+        --world-size 4 \
+        --num-epochs $((epoch+1)) \
+        --use-fp16 0 \
+        --embedding-dim 2048 \
+        --hidden-dim 2048 \
+        --num-layers 3 \
+        --batch-size 100 \
+        --exp-dir rnn_lm/exp_$spk_id \
+        --train-n-layer 4 \
+        --save-last-epoch true \
+        --lm-data-path data/lm_training_bpe_500_userlibri \
+        --lm-data-name "$num" \
+        --alpha 1e-4 \
+        --beta 1e-3
+
+
+        #--lm-data-path data/lm_training_bpe_500_userlibri/sorted_lm_data_$num.pt \
+      if [ -f rnn_lm/exp_$spk_id/epoch-$((epoch-5)).pt ]; then rm rnn_lm/exp_$spk_id/epoch-$((epoch-5)).pt; fi
+      ./pruned_transducer_stateless5/decode_userlibri_perid.py \
+        --epoch 30 \
+        --avg 15 \
+        --exp-dir ./pruned_transducer_stateless5/exp_layer12 \
+        --max-duration 400 \
+        --decoding-method modified_beam_search_lm_shallow_fusion \
+        --beam-size 4 \
+        --num-encoder-layer 12 \
+        --lm-type rnn \
+        --lm-scale 0.3 \
+        --lm-exp-dir rnn_lm/exp_$spk_id \
+        --lm-epoch $epoch \
+        --lm-avg 1 \
+        --rnn-lm-num-layers 3 \
+        --use-shallow-fusion 1 \
+        --rnn-lm-tie-weights 1 \
+        --surplus-layer true \
+        --test-id "$book_ids" \
+        --spk-id "$spk_id" \
+        --result-path $result_path
+    done < "$filename"
+    lm_list=pruned_transducer_stateless5/results_per_spkid_fed_"$epoch".txt
+    ./utils/average_parameters_fed.py \
+      --topk 67 \
+      --lm-list ${lm_list} \
+      --start-epoch $((epoch+1)) \
+      --exp-dir rnn_lm/exp_fed
+    
+    while read line; do
+      # echo $line
+      spk_id=$(echo "$line" | cut -f1)
+      book_ids=$(echo "$line" | cut -f2-)
+      echo $spk_id
+      echo $book_ids
+      num=$(echo $book_ids | grep -o -E "[0-9]+")
+      echo $num
+
+      ./pruned_transducer_stateless5/decode_userlibri_perid.py \
+        --epoch 30 \
+        --avg 15 \
+        --exp-dir ./pruned_transducer_stateless5/exp_layer12 \
+        --max-duration 400 \
+        --decoding-method modified_beam_search_lm_shallow_fusion \
+        --beam-size 4 \
+        --num-encoder-layer 12 \
+        --lm-type rnn \
+        --lm-scale 0.3 \
+        --lm-exp-dir rnn_lm/exp_fed \
+        --lm-epoch $epoch \
+        --lm-avg 1 \
+        --rnn-lm-num-layers 3 \
+        --use-shallow-fusion 1 \
+        --rnn-lm-tie-weights 1 \
+        --surplus-layer true \
+        --test-id "$book_ids" \
+        --spk-id "$spk_id" \
+        --result-path $result_path2
+    done < "$filename"
+    
+  done
 fi
