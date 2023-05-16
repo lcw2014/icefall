@@ -29,8 +29,10 @@ for i, fn1 in enumerate(fname):
 
         # 불러온 텍스트 파일로부터 id 불러오기
         for dir in text_dir:
+            # print(dir)
             book_id = dir.split('/')[-2].split('-')[-1]
             # print(book_id)
+            # exit()
             with open(dir, encoding='utf-8', mode='r') as ftemp:
                 temp = [txt.split()[0] for txt in ftemp.readlines()]
                 ids.extend(temp)
@@ -40,6 +42,8 @@ for i, fn1 in enumerate(fname):
                 dict_per_book[book_id].append(temp)
         dset[i] = dict_per_book
         book_sets = book_sets.union(set(book_ids))
+        # print(len(book_sets))
+        # exit()
 
         # 일치하는 id만 추출 전체
         with open(fname2[i], encoding='utf-8', mode='w') as f2:
@@ -60,9 +64,10 @@ for i, fn1 in enumerate(fname):
                             if t['id'] == id:
                                 bookjson.write(json.dumps(t) + "\n")
                                 break
-            os.system(f'gzip {jn}')
+            os.system(f'gzip -f {jn}')
 
 with open('data/manifests/book_ids.txt','w') as bf:
+    print(len(book_sets))
     for bids in book_sets:
         bf.write(f'{bids} ')
 
@@ -98,6 +103,7 @@ for i, fn1 in enumerate(fname):
                         break
         
         # 일치하는 id만 추출 book별로
+        print(len(dset[i]))
         for book_id in dset[i].keys():
             with open(f'data/manifests/userlibri_recordings_{co[i]}_{book_id}.jsonl','w') as bookjson:
                 jn = f'data/manifests/userlibri_recordings_{co[i]}_{book_id}.jsonl'
@@ -105,7 +111,9 @@ for i, fn1 in enumerate(fname):
                     for id in ids:
                         for t in tset:
                             if t['id'] == id:
+                                if t is None:
+                                    print('error')
                                 # print(id)
                                 bookjson.write(json.dumps(t) + "\n")
                                 break
-            os.system(f'gzip {jn}')
+            os.system(f'gzip -f {jn}')

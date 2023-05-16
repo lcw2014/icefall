@@ -343,6 +343,9 @@ def average_models(params, models, weights):
             adapter=params.adapter,
         )
 
+    for avg_param in avg_model.parameters():
+        avg_param.data.fill_(0)
+        
     # Copy the weights from each model into the averaged model
     for model, weight in zip(models, weights):
         for avg_param, param in zip(avg_model.parameters(), model.parameters()):

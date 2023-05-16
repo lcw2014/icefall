@@ -382,6 +382,7 @@ class LibriSpeechAsrDataModule:
         sampler = DynamicBucketingSampler(
             cuts,
             max_duration=self.args.max_duration,
+            num_buckets=self.args.num_buckets,
             shuffle=False,
         )
         logging.debug("About to create test dataloader")

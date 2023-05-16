@@ -186,16 +186,16 @@ def get_parser():
     )
 
     parser.add_argument(
-        "--lm-list",
+        "--model-paths",
         type=str,
         help="LM training data",
     )
 
     parser.add_argument(
-        "--topk",
-        type=int,
-        default=0,
-        help="LM training data",
+        "--alpha",
+        type=float,
+        default=1.0,
+        help="Hidden dim of the model",
     )
 
     return parser
@@ -255,7 +255,7 @@ def load_checkpoint_if_available(
     if params.start_epoch <= 0:
         return
 
-    filename = f"rnn_lm/exp_book_{id}/epoch-{params.start_epoch-1}.pt"
+    filename = id
 
     logging.info(f"Loading checkpoint: {filename}")
     saved_params = load_checkpoint(
@@ -300,7 +300,7 @@ def save_checkpoint(
     import os
     if not os.path.exists(params.exp_dir):
         os.makedirs(params.exp_dir)
-    filename = f"{params.exp_dir}/epoch-{params.start_epoch-1}.pt"
+    filename = f"{params.exp_dir}/epoch-{params.start_epoch}.pt"
     save_checkpoint_impl(
         filename=filename,
         model=model,
@@ -356,23 +356,13 @@ if __name__ == "__main__":
     params.update(vars(args))
     device = torch.device("cpu")
 
-    with open(params.lm_list, 'r') as f:
-        data_id = [txt.strip() for txt in f.readlines()]
-        temp = list()
-        for d in data_id:
-            if float(d.split('\t')[1]) < 100:
-                temp.append(d)
-        data_id = temp
-        data_id = [(e.split('\t')[0], e.split('\t')[1]) for e in data_id]
-        data_id = sorted(data_id, key=lambda x : x[1])
-    if params.topk:
-        data_id = data_id[:params.topk]
-
+    model_paths = params.model_paths.split()
     models = list()
-    weights = torch.ones(len(data_id)).float() / len(data_id)
+    print(model_paths)
+    weights = torch.tensor([params.alpha, 1 - params.alpha]).float()
 
     from copy import deepcopy
-    for did in data_id:
+    for did in model_paths:
         model = RnnLmModel(
             vocab_size=params.vocab_size,
             embedding_dim=params.embedding_dim,
@@ -382,7 +372,7 @@ if __name__ == "__main__":
             surplus_layer=params.surplus_layer,
             adapter=params.adapter,
         )
-        _ = load_checkpoint_if_available(params=params, model=model, id=did[0].replace("userlibri-",""))
+        _ = load_checkpoint_if_available(params=params, model=model, id=did)
 
         model.to(device)
         model.device = device

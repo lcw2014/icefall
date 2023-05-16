@@ -29,5 +29,8 @@ for id in ids:
                 tx = re.sub('[0-9]','',tx)
                 tx = re.sub('-',' ',tx)
                 tx = ' '.join(tx.strip().split(' ')).strip()
+                if len(tx) == 0:
+                    print('0 word, skip')
+                    continue
                 f2.write(f'{tx}\n')
         

@@ -405,6 +405,7 @@ def get_dataloader_fed(
       words = lm_data["words"]
       sentences = lm_data["sentences"]
       sentence_lengths = lm_data["sentence_lengths"]
+    # print(sentence_lengths)
     dataset = FEDLmDataset(
         sentences=sentences,
         words=words,
@@ -413,6 +414,7 @@ def get_dataloader_fed(
         batch_size=params.batch_size,
         order=order,
     )
+    # print(dataset)
     if is_distributed:
         sampler = DistributedSampler(dataset, shuffle=False, drop_last=True)
     else:
