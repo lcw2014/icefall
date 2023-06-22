@@ -25,6 +25,8 @@ from icefall.env import get_env_info
 from icefall.utils import AttributeDict, MetricsTracker, setup_logger, str2bool
 
 import copy
+import numpy as np
+import math
 
 def get_parser():
     parser = argparse.ArgumentParser(
@@ -198,13 +200,6 @@ def get_parser():
         help="LM training data",
     )
 
-    parser.add_argument(
-        "--model-selection",
-        type=bool,
-        default=False,
-        help="LM training data",
-    )
-
     return parser
 
 def get_params() -> AttributeDict:
@@ -318,6 +313,27 @@ def save_checkpoint(
     )
 
 
+def caculate_weights(data):
+    # data : [(book_id, WER), ... ,]
+    temp = [list(k) for k in data]
+
+    weights = torch.tensor([]).float()
+    for t in temp:
+        weights = torch.cat([weights, torch.tensor([float(t[1])])])
+    print(weights)
+    mean = weights.mean()
+    std = torch.std(weights)
+    print(std)
+    weights = torch.exp(- (weights - mean) / std)
+
+    print(weights)
+    weights = weights / weights.sum()
+    print(weights)
+    return weights
+
+
+
+
 def average_models(params, models, weights):
     """
     Averages a list of PyTorch models with corresponding weights
@@ -347,14 +363,9 @@ def average_models(params, models, weights):
         avg_param.data.fill_(0)
 
     # Copy the weights from each model into the averaged model
-    if params.model_selection:
-        for model, weight in zip(models, weights):
-            for avg_param, param in zip(avg_model.parameters(), model.parameters()):
-                avg_param.data.add_(weight * param.data)
-    else:
-        for model, weight in zip(models, weights):
-            for avg_param, param in zip(avg_model.parameters(), model.parameters()):
-                avg_param.data.add_(weight * param.data)
+    for model, weight in zip(models, weights):
+        for avg_param, param in zip(avg_model.parameters(), model.parameters()):
+            avg_param.data.add_(weight * param.data)
     
     return avg_model
 
@@ -367,27 +378,25 @@ if __name__ == "__main__":
     params = get_params()
     params.update(vars(args))
     device = torch.device("cpu")
-    wer_avg = 0
 
     with open(params.lm_list, 'r') as f:
-        data_id = [txt.strip() for txt in f.readlines()]
+        data = [txt.strip() for txt in f.readlines()]
         temp = list()
-        for d in data_id:
+        for d in data:
             if float(d.split('\t')[1]) < 100:
                 temp.append(d)
-                wer_avg += float(d.split('\t')[1])
-        data_id = temp
-        data_id = [(e.split('\t')[0], e.split('\t')[1]) for e in data_id]
-        data_id = sorted(data_id, key=lambda x : x[1])
-    wer_avg = wer_avg / len(data_id)
+        data = temp
+        data = [(e.split('\t')[0], e.split('\t')[1]) for e in data]
+        data = sorted(data, key=lambda x : x[1])
     if params.topk:
-        data_id = data_id[:params.topk]
+        data = data[:params.topk]
 
     models = list()
-    
+    # weights = torch.ones(len(data)).float() / len(data)
+    weights = caculate_weights(data)
 
     from copy import deepcopy
-    for did in data_id:
+    for did in data:
         model = RnnLmModel(
             vocab_size=params.vocab_size,
             embedding_dim=params.embedding_dim,
@@ -397,14 +406,11 @@ if __name__ == "__main__":
             surplus_layer=params.surplus_layer,
             adapter=params.adapter,
         )
-        if params.model_selection and float(did[1]) > wer_avg:
-            continue
         _ = load_checkpoint_if_available(params=params, model=model, id=did[0].replace("userlibri-",""))
 
         model.to(device)
         model.device = device
         models.append(deepcopy(model))
-    weights = torch.ones(len(models)).float() / len(models)
     model = average_models(params, models, weights=weights)
 
     save_checkpoint(
@@ -412,3 +418,5 @@ if __name__ == "__main__":
         model=model,
         optimizer=None,
     )
+    
+    

@@ -547,8 +547,8 @@ fi
 if [ $stage -le 13 ] && [ $stop_stage -ge 13 ]; then
   echo "Stage 13: train and decode using each book id for 45 epochs"
   filename="data/book_to_data.txt"
-  for epoch in 35 40 45; do
-    result_path="/home/lee/Workspace/icefall/egs/librispeech/ASR/pruned_transducer_stateless5/results_per_book_$epoch.txt"
+  for epoch in 75 80; do
+    result_path="/home/lee/Workspace/icefall/egs/librispeech/ASR/pruned_transducer_stateless5/results_per_book_vanilla_$epoch.txt"
     if [ -f $result_path ]; then rm $result_path; fi
     while read line; do
       book_id=$(echo "$line" | cut -f1)
@@ -741,10 +741,8 @@ if [ $stage -le 16 ] && [ $stop_stage -ge 16 ]; then
     # echo $line
     spk_id=$(echo "$line" | cut -f1)
     book_ids=$(echo "$line" | cut -f2-)
-    echo $spk_id
-    echo $book_ids
     num=$(echo $book_ids | grep -o -E "[0-9]+")
-    echo $num
+    
     if [ ! -d rnn_lm/exp_$spk_id ]; then mkdir -p rnn_lm/exp_$spk_id; fi
     cp rnn_lm/exp/epoch-30.pt rnn_lm/exp_"$spk_id"
     ./rnn_lm/train_plm_perid.py \
@@ -925,9 +923,9 @@ if [ $stage -le 18 ] && [ $stop_stage -ge 18 ]; then
   beta=(1e-1)
 
   for i in "${!alpha[@]}"; do
-    for epoch in 35 40 45; do
-      result_path=/home/lee/Workspace/icefall/egs/librispeech/ASR/pruned_transducer_stateless5/results_per_book_fed_"$epoch"_${alpha[$i]}_${beta[$i]}.txt
-      result_path2=/home/lee/Workspace/icefall/egs/librispeech/ASR/pruned_transducer_stateless5/results_per_book_fed_"$epoch"_${alpha[$i]}_${beta[$i]}_avg.txt
+    for epoch in 35 40 45 50 55 60 65 70; do
+      result_path=/home/lee/Workspace/icefall/egs/librispeech/ASR/pruned_transducer_stateless5/results_per_book_fed2_"$epoch"_${alpha[$i]}_${beta[$i]}.txt
+      result_path2=/home/lee/Workspace/icefall/egs/librispeech/ASR/pruned_transducer_stateless5/results_per_book_fed2_"$epoch"_${alpha[$i]}_${beta[$i]}_avg.txt
 
       if [ -f $result_path ]; then rm $result_path; fi
       if [ -f $result_path2 ]; then rm $result_path2; fi
@@ -990,7 +988,7 @@ if [ $stage -le 18 ] && [ $stop_stage -ge 18 ]; then
           
       done < "$filename"
 
-      lm_list=pruned_transducer_stateless5/results_per_book_fed_"$epoch"_${alpha[$i]}_${beta[$i]}.txt
+      lm_list=pruned_transducer_stateless5/results_per_book_fed2_"$epoch"_${alpha[$i]}_${beta[$i]}.txt
       ./utils/average_parameters_fed.py \
         --lm-list ${lm_list} \
         --start-epoch $((epoch+1)) \
@@ -1023,9 +1021,9 @@ if [ $stage -le 18 ] && [ $stop_stage -ge 18 ]; then
 
     echo "Stage 18-1: overfitting stage"
 
-    for epoch in 50 55 60; do
+    for epoch in 75 80 85 90; do
       
-      result_path=/home/lee/Workspace/icefall/egs/librispeech/ASR/pruned_transducer_stateless5/results_per_book_fed_overfitting_"$epoch".txt
+      result_path=/home/lee/Workspace/icefall/egs/librispeech/ASR/pruned_transducer_stateless5/results_per_book_fed2_overfitting_"$epoch".txt
 
       if [ -f $result_path ]; then rm $result_path; fi
       while read line; do
@@ -1147,8 +1145,8 @@ if [ $stage -le 20 ] && [ $stop_stage -ge 20 ]; then
   mkdir -p rnn_lm/exp_averaged
   if [ ! -f rnn_lm/exp_averaged/epoch-30.pt ]; then cp rnn_lm/exp/epoch-30.pt rnn_lm/exp_averaged; fi
   filename="data/book_to_data.txt"
-  # alpha=(1e-3 1e-3 1e-3 1e-4 1e-4 1e-2 1e-2 1e-2)
-  # beta=(1e-2 1e-3 1e-4 1e-2 1e-3 1e-2 1e-3 1e-4)
+  alpha=(1e-3 1e-3 1e-3 1e-4 1e-4 1e-2 1e-2 1e-2)
+  beta=(1e-2 1e-3 1e-4 1e-2 1e-3 1e-2 1e-3 1e-4)
 
   for epoch in 35 40 45; do
     result_path=/home/lee/Workspace/icefall/egs/librispeech/ASR/pruned_transducer_stateless5/results_per_book_"$epoch".txt
@@ -1208,8 +1206,7 @@ if [ $stage -le 20 ] && [ $stop_stage -ge 20 ]; then
         --rnn-lm-tie-weights 1 \
         --test-id "$data_ids" \
         --book-id "$book_id" \
-        --result-path $result_path
-        
+        --result-path $result_path 
     done < "$filename"
 
     lm_list=pruned_transducer_stateless5/results_per_book_"$epoch".txt
@@ -1244,7 +1241,7 @@ if [ $stage -le 20 ] && [ $stop_stage -ge 20 ]; then
   done
   echo "Stage 20-1: overfitting stage"
 
-  for epoch in 50 55 60; do
+  for epoch in 50 55 60 65 70 75 80; do
     
     result_path=/home/lee/Workspace/icefall/egs/librispeech/ASR/pruned_transducer_stateless5/results_per_book_overfitting_"$epoch".txt
 
@@ -1253,6 +1250,716 @@ if [ $stage -le 20 ] && [ $stop_stage -ge 20 ]; then
       book_id=$(echo "$line" | cut -f1)
       data_ids=$(echo "$line" | cut -f2-)
       cp rnn_lm/exp_averaged/epoch-45.pt rnn_lm/exp_book_$book_id/epoch-45.pt
+      if [ $book_id -eq 2002 ]
+      then
+        batch_size=50
+      else
+        batch_size=100
+      fi
+      ./rnn_lm/train_plm.py \
+        --start-epoch $((epoch-4)) \
+        --world-size 3 \
+        --num-epochs $((epoch+1)) \
+        --use-fp16 0 \
+        --embedding-dim 2048 \
+        --hidden-dim 2048 \
+        --num-layers 3 \
+        --batch-size $batch_size \
+        --exp-dir rnn_lm/exp_book_$book_id \
+        --save-last-epoch true \
+        --lm-data-path data/lm_training_bpe_500_userlibri \
+        --lm-data-name "$book_id"
+      
+      ./pruned_transducer_stateless5/decode_userlibri.py \
+        --epoch 30 \
+        --avg 15 \
+        --exp-dir ./pruned_transducer_stateless5/exp_layer12 \
+        --max-duration 400 \
+        --decoding-method modified_beam_search_lm_shallow_fusion \
+        --beam-size 4 \
+        --num-encoder-layer 12 \
+        --lm-type rnn \
+        --lm-scale 0.15 \
+        --lm-exp-dir rnn_lm/exp_book_$book_id \
+        --lm-epoch $epoch \
+        --lm-avg 1 \
+        --rnn-lm-num-layers 3 \
+        --use-shallow-fusion 1 \
+        --rnn-lm-tie-weights 1 \
+        --test-id "$data_ids" \
+        --book-id "$book_id" \
+        --result-path $result_path
+    done < "$filename"
+  done
+fi
+
+if [ $stage -le 21 ] && [ $stop_stage -ge 21 ]; then
+  echo "Stage 21: FED + adaptive weight average wrt valid WER"
+  mkdir -p rnn_lm/exp_fed_perbook
+  if [ ! -f rnn_lm/exp_fed_perbook/epoch-30.pt ]; then cp rnn_lm/exp/epoch-30.pt rnn_lm/exp_fed_perbook; fi
+  filename="data/book_to_data.txt"
+  alpha=(1e-4)
+  beta=(1e-1)
+
+  for i in "${!alpha[@]}"; do
+    for epoch in 35 40 45; do
+      result_path=/home/lee/Workspace/icefall/egs/librispeech/ASR/pruned_transducer_stateless5/results_per_book_fed_wer2_"$epoch"_${alpha[$i]}_${beta[$i]}.txt
+      result_path2=/home/lee/Workspace/icefall/egs/librispeech/ASR/pruned_transducer_stateless5/results_per_book_fed_wer2_"$epoch"_${alpha[$i]}_${beta[$i]}_valid.txt
+      result_path3=/home/lee/Workspace/icefall/egs/librispeech/ASR/pruned_transducer_stateless5/results_per_book_fed_wer2_"$epoch"_${alpha[$i]}_${beta[$i]}_avg.txt
+
+      if [ -f $result_path ]; then rm $result_path; fi
+      if [ -f $result_path2 ]; then rm $result_path2; fi
+      if [ -f $result_path3 ]; then rm $result_path3; fi
+      echo ${alpha[$i]}_${beta[$i]}
+      while read line; do
+        book_id=$(echo "$line" | cut -f1)
+        data_ids=$(echo "$line" | cut -f2-)
+        # echo $line
+        if [ ! -d rnn_lm/exp_book_$book_id ]; then mkdir -p rnn_lm/exp_book_$book_id; fi
+        cp rnn_lm/exp_fed_perbook/epoch-$((epoch-5)).pt rnn_lm/exp_book_$book_id/epoch-$((epoch-5)).pt
+        
+        if [ $book_id -eq 2002 ]
+        then
+          batch_size=50
+        else
+          batch_size=100
+        fi
+        # echo $batch_size
+
+        ./rnn_lm/train_plm_fed_perbook.py \
+          --start-epoch $((epoch-4)) \
+          --world-size 3 \
+          --num-epochs $((epoch+1)) \
+          --use-fp16 0 \
+          --embedding-dim 2048 \
+          --hidden-dim 2048 \
+          --num-layers 3 \
+          --batch-size $batch_size \
+          --exp-dir rnn_lm/exp_book_$book_id \
+          --save-last-epoch true \
+          --lm-data-path data/lm_training_bpe_500_userlibri \
+          --lm-data-name "$book_id" \
+          --alpha ${alpha[$i]} \
+          --beta ${beta[$i]}
+        
+        # if [ "$epoch" != 40 ]; then
+        #   if [ -f rnn_lm/exp_$id/epoch-$((epoch-5)).pt ]; then rm rnn_lm/exp_$id/epoch-$((epoch-5)).pt; fi
+        # fi
+
+        if [ -f rnn_lm/exp_book_$book_id/epoch-30.pt ]; then rm rnn_lm/exp_book_$book_id/epoch-30.pt; fi
+        ./pruned_transducer_stateless5/decode_userlibri.py \
+          --epoch 30 \
+          --avg 15 \
+          --exp-dir ./pruned_transducer_stateless5/exp_layer12 \
+          --max-duration 400 \
+          --decoding-method modified_beam_search_lm_shallow_fusion \
+          --beam-size 4 \
+          --num-encoder-layer 12 \
+          --lm-type rnn \
+          --lm-scale 0.15 \
+          --lm-exp-dir rnn_lm/exp_book_$book_id \
+          --lm-epoch $epoch \
+          --lm-avg 1 \
+          --rnn-lm-num-layers 3 \
+          --use-shallow-fusion 1 \
+          --rnn-lm-tie-weights 1 \
+          --test-id "$data_ids" \
+          --book-id "$book_id" \
+          --result-path $result_path
+          
+      done < "$filename"
+
+      while read line; do
+        book_id=$(echo "$line" | cut -f1)
+        data_ids=$(echo "$line" | cut -f2-)
+        ./pruned_transducer_stateless5/decode_userlibri_valid.py \
+          --epoch 30 \
+          --avg 15 \
+          --exp-dir ./pruned_transducer_stateless5/exp_layer12 \
+          --max-duration 400 \
+          --decoding-method modified_beam_search_lm_shallow_fusion \
+          --beam-size 4 \
+          --num-encoder-layer 12 \
+          --lm-type rnn \
+          --lm-scale 0.15 \
+          --lm-exp-dir rnn_lm/exp_book_$book_id \
+          --lm-epoch $epoch \
+          --lm-avg 1 \
+          --rnn-lm-num-layers 3 \
+          --use-shallow-fusion 1 \
+          --rnn-lm-tie-weights 1 \
+          --test-id "$data_ids" \
+          --book-id "$book_id" \
+          --result-path $result_path2
+      done < "$filename"
+
+      lm_list=pruned_transducer_stateless5/results_per_book_fed_wer2_"$epoch"_${alpha[$i]}_${beta[$i]}_valid.txt
+      ./utils/average_parameters_fed_WER.py \
+        --lm-list ${lm_list} \
+        --start-epoch $((epoch+1)) \
+        --exp-dir rnn_lm/exp_fed_perbook
+      
+      while read line; do
+        book_id=$(echo "$line" | cut -f1)
+        data_ids=$(echo "$line" | cut -f2-)
+        ./pruned_transducer_stateless5/decode_userlibri.py \
+          --epoch 30 \
+          --avg 15 \
+          --exp-dir ./pruned_transducer_stateless5/exp_layer12 \
+          --max-duration 400 \
+          --decoding-method modified_beam_search_lm_shallow_fusion \
+          --beam-size 4 \
+          --num-encoder-layer 12 \
+          --lm-type rnn \
+          --lm-scale 0.15 \
+          --lm-exp-dir rnn_lm/exp_fed_perbook \
+          --lm-epoch $epoch \
+          --lm-avg 1 \
+          --rnn-lm-num-layers 3 \
+          --use-shallow-fusion 1 \
+          --rnn-lm-tie-weights 1 \
+          --test-id "$data_ids" \
+          --book-id "$book_id" \
+          --result-path $result_path3
+      done < "$filename"
+    done
+
+    echo "Stage 18-1: overfitting stage"
+
+    for epoch in 50 55 60 65 70 75 80; do
+      
+      result_path=/home/lee/Workspace/icefall/egs/librispeech/ASR/pruned_transducer_stateless5/results_per_book_fed_wer2_overfitting_"$epoch".txt
+
+      if [ -f $result_path ]; then rm $result_path; fi
+      while read line; do
+        book_id=$(echo "$line" | cut -f1)
+        data_ids=$(echo "$line" | cut -f2-)
+        cp rnn_lm/exp_fed_perbook/epoch-45.pt rnn_lm/exp_book_$book_id/epoch-45.pt
+        if [ $book_id -eq 2002 ]
+        then
+          batch_size=50
+        else
+          batch_size=100
+        fi
+        ./rnn_lm/train_plm.py \
+          --start-epoch $((epoch-4)) \
+          --world-size 3 \
+          --num-epochs $((epoch+1)) \
+          --use-fp16 0 \
+          --embedding-dim 2048 \
+          --hidden-dim 2048 \
+          --num-layers 3 \
+          --batch-size $batch_size \
+          --exp-dir rnn_lm/exp_book_$book_id \
+          --save-last-epoch true \
+          --lm-data-path data/lm_training_bpe_500_userlibri \
+          --lm-data-name "$book_id"
+        
+        ./pruned_transducer_stateless5/decode_userlibri.py \
+          --epoch 30 \
+          --avg 15 \
+          --exp-dir ./pruned_transducer_stateless5/exp_layer12 \
+          --max-duration 400 \
+          --decoding-method modified_beam_search_lm_shallow_fusion \
+          --beam-size 4 \
+          --num-encoder-layer 12 \
+          --lm-type rnn \
+          --lm-scale 0.15 \
+          --lm-exp-dir rnn_lm/exp_book_$book_id \
+          --lm-epoch $epoch \
+          --lm-avg 1 \
+          --rnn-lm-num-layers 3 \
+          --use-shallow-fusion 1 \
+          --rnn-lm-tie-weights 1 \
+          --test-id "$data_ids" \
+          --book-id "$book_id" \
+          --result-path $result_path
+      done < "$filename"
+    done
+  done
+fi
+
+if [ $stage -le 22 ] && [ $stop_stage -ge 22 ]; then
+  echo "Stage 22: FED3: CV + FED + model selection"
+  mkdir -p rnn_lm/exp_fed_perbook
+  if [ ! -f rnn_lm/exp_fed_perbook/epoch-30.pt ]; then cp rnn_lm/exp/epoch-30.pt rnn_lm/exp_fed_perbook; fi
+  filename="data/book_to_data.txt"
+  alpha=(1e-4)
+  beta=(1e-1)
+
+  for i in "${!alpha[@]}"; do
+    for epoch in 35 40 45; do
+      result_path=/home/lee/Workspace/icefall/egs/librispeech/ASR/pruned_transducer_stateless5/results_per_book_fed3_"$epoch"_${alpha[$i]}_${beta[$i]}.txt
+      result_path2=/home/lee/Workspace/icefall/egs/librispeech/ASR/pruned_transducer_stateless5/results_per_book_fed3_"$epoch"_${alpha[$i]}_${beta[$i]}_valid.txt
+      result_path3=/home/lee/Workspace/icefall/egs/librispeech/ASR/pruned_transducer_stateless5/results_per_book_fed3_"$epoch"_${alpha[$i]}_${beta[$i]}_avg.txt
+
+      if [ -f $result_path ]; then rm $result_path; fi
+      if [ -f $result_path2 ]; then rm $result_path2; fi
+      if [ -f $result_path3 ]; then rm $result_path3; fi
+      echo ${alpha[$i]}_${beta[$i]}
+      while read line; do
+        book_id=$(echo "$line" | cut -f1)
+        data_ids=$(echo "$line" | cut -f2-)
+        # echo $line
+        if [ ! -d rnn_lm/exp_book_$book_id ]; then mkdir -p rnn_lm/exp_book_$book_id; fi
+        cp rnn_lm/exp_fed_perbook/epoch-$((epoch-5)).pt rnn_lm/exp_book_$book_id/epoch-$((epoch-5)).pt
+        
+        if [ $book_id -eq 2002 ]
+        then
+          batch_size=50
+        else
+          batch_size=100
+        fi
+        # echo $batch_size
+
+        ./rnn_lm/train_plm_fed_perbook.py \
+          --start-epoch $((epoch-4)) \
+          --world-size 3 \
+          --num-epochs $((epoch+1)) \
+          --use-fp16 0 \
+          --embedding-dim 2048 \
+          --hidden-dim 2048 \
+          --num-layers 3 \
+          --batch-size $batch_size \
+          --exp-dir rnn_lm/exp_book_$book_id \
+          --save-last-epoch true \
+          --lm-data-path data/lm_training_bpe_500_userlibri \
+          --lm-data-name "$book_id" \
+          --alpha ${alpha[$i]} \
+          --beta ${beta[$i]}
+        
+        # if [ "$epoch" != 40 ]; then
+        #   if [ -f rnn_lm/exp_$id/epoch-$((epoch-5)).pt ]; then rm rnn_lm/exp_$id/epoch-$((epoch-5)).pt; fi
+        # fi
+
+        if [ -f rnn_lm/exp_book_$book_id/epoch-30.pt ]; then rm rnn_lm/exp_book_$book_id/epoch-30.pt; fi
+        ./pruned_transducer_stateless5/decode_userlibri.py \
+          --epoch 30 \
+          --avg 15 \
+          --exp-dir ./pruned_transducer_stateless5/exp_layer12 \
+          --max-duration 400 \
+          --decoding-method modified_beam_search_lm_shallow_fusion \
+          --beam-size 4 \
+          --num-encoder-layer 12 \
+          --lm-type rnn \
+          --lm-scale 0.15 \
+          --lm-exp-dir rnn_lm/exp_book_$book_id \
+          --lm-epoch $epoch \
+          --lm-avg 1 \
+          --rnn-lm-num-layers 3 \
+          --use-shallow-fusion 1 \
+          --rnn-lm-tie-weights 1 \
+          --test-id "$data_ids" \
+          --book-id "$book_id" \
+          --result-path $result_path
+          
+      done < "$filename"
+
+      while read line; do
+        book_id=$(echo "$line" | cut -f1)
+        data_ids=$(echo "$line" | cut -f2-)
+        ./pruned_transducer_stateless5/decode_userlibri_valid.py \
+          --epoch 30 \
+          --avg 15 \
+          --exp-dir ./pruned_transducer_stateless5/exp_layer12 \
+          --max-duration 400 \
+          --decoding-method modified_beam_search_lm_shallow_fusion \
+          --beam-size 4 \
+          --num-encoder-layer 12 \
+          --lm-type rnn \
+          --lm-scale 0.15 \
+          --lm-exp-dir rnn_lm/exp_book_$book_id \
+          --lm-epoch $epoch \
+          --lm-avg 1 \
+          --rnn-lm-num-layers 3 \
+          --use-shallow-fusion 1 \
+          --rnn-lm-tie-weights 1 \
+          --test-id "$data_ids" \
+          --book-id "$book_id" \
+          --result-path $result_path2
+      done < "$filename"
+
+      lm_list=pruned_transducer_stateless5/results_per_book_fed3_"$epoch"_${alpha[$i]}_${beta[$i]}_valid.txt
+      ./utils/average_parameters_fed.py \
+        --lm-list ${lm_list} \
+        --start-epoch $((epoch+1)) \
+        --exp-dir rnn_lm/exp_fed_perbook
+      
+      while read line; do
+        book_id=$(echo "$line" | cut -f1)
+        data_ids=$(echo "$line" | cut -f2-)
+        ./pruned_transducer_stateless5/decode_userlibri.py \
+          --epoch 30 \
+          --avg 15 \
+          --exp-dir ./pruned_transducer_stateless5/exp_layer12 \
+          --max-duration 400 \
+          --decoding-method modified_beam_search_lm_shallow_fusion \
+          --beam-size 4 \
+          --num-encoder-layer 12 \
+          --lm-type rnn \
+          --lm-scale 0.15 \
+          --lm-exp-dir rnn_lm/exp_fed_perbook \
+          --lm-epoch $epoch \
+          --lm-avg 1 \
+          --rnn-lm-num-layers 3 \
+          --use-shallow-fusion 1 \
+          --rnn-lm-tie-weights 1 \
+          --test-id "$data_ids" \
+          --book-id "$book_id" \
+          --result-path $result_path3
+      done < "$filename"
+    done
+
+    echo "Stage 22-1: overfitting stage"
+
+    for epoch in 50 55 60 65 70 75 80; do
+      
+      result_path=/home/lee/Workspace/icefall/egs/librispeech/ASR/pruned_transducer_stateless5/results_per_book_fed3_overfitting_"$epoch".txt
+
+      if [ -f $result_path ]; then rm $result_path; fi
+      while read line; do
+        book_id=$(echo "$line" | cut -f1)
+        data_ids=$(echo "$line" | cut -f2-)
+        cp rnn_lm/exp_fed_perbook/epoch-45.pt rnn_lm/exp_book_$book_id/epoch-45.pt
+        if [ $book_id -eq 2002 ]
+        then
+          batch_size=50
+        else
+          batch_size=100
+        fi
+        ./rnn_lm/train_plm.py \
+          --start-epoch $((epoch-4)) \
+          --world-size 3 \
+          --num-epochs $((epoch+1)) \
+          --use-fp16 0 \
+          --embedding-dim 2048 \
+          --hidden-dim 2048 \
+          --num-layers 3 \
+          --batch-size $batch_size \
+          --exp-dir rnn_lm/exp_book_$book_id \
+          --save-last-epoch true \
+          --lm-data-path data/lm_training_bpe_500_userlibri \
+          --lm-data-name "$book_id"
+        
+        ./pruned_transducer_stateless5/decode_userlibri.py \
+          --epoch 30 \
+          --avg 15 \
+          --exp-dir ./pruned_transducer_stateless5/exp_layer12 \
+          --max-duration 400 \
+          --decoding-method modified_beam_search_lm_shallow_fusion \
+          --beam-size 4 \
+          --num-encoder-layer 12 \
+          --lm-type rnn \
+          --lm-scale 0.15 \
+          --lm-exp-dir rnn_lm/exp_book_$book_id \
+          --lm-epoch $epoch \
+          --lm-avg 1 \
+          --rnn-lm-num-layers 3 \
+          --use-shallow-fusion 1 \
+          --rnn-lm-tie-weights 1 \
+          --test-id "$data_ids" \
+          --book-id "$book_id" \
+          --result-path $result_path
+      done < "$filename"
+    done
+  done
+fi
+
+if [ $stage -le 23 ] && [ $stop_stage -ge 23 ]; then
+  echo "Stage 23: train per book id with MAML fed, finetuning for 10epoch"
+  mkdir -p rnn_lm/exp_fed_perbook
+  if [ ! -f rnn_lm/exp_fed_perbook/epoch-30.pt ]; then cp rnn_lm/exp/epoch-30.pt rnn_lm/exp_fed_perbook; fi
+  filename="data/book_to_data.txt"
+  alpha=(1e-4)
+  beta=(1e-1)
+
+  for i in "${!alpha[@]}"; do
+    for epoch in 40 50 60; do
+      result_path=/home/lee/Workspace/icefall/egs/librispeech/ASR/pruned_transducer_stateless5/results_per_book_fed4_"$epoch"_${alpha[$i]}_${beta[$i]}.txt
+      result_path2=/home/lee/Workspace/icefall/egs/librispeech/ASR/pruned_transducer_stateless5/results_per_book_fed4_"$epoch"_${alpha[$i]}_${beta[$i]}_avg.txt
+
+      if [ -f $result_path ]; then rm $result_path; fi
+      if [ -f $result_path2 ]; then rm $result_path2; fi
+      echo ${alpha[$i]}_${beta[$i]}
+      while read line; do
+        book_id=$(echo "$line" | cut -f1)
+        data_ids=$(echo "$line" | cut -f2-)
+        # echo $line
+        if [ ! -d rnn_lm/exp_book_$book_id ]; then mkdir -p rnn_lm/exp_book_$book_id; fi
+        cp rnn_lm/exp_fed_perbook/epoch-$((epoch-10)).pt rnn_lm/exp_book_$book_id/epoch-$((epoch-10)).pt
+        
+        if [ $book_id -eq 2002 ]
+        then
+          batch_size=50
+        else
+          batch_size=100
+        fi
+        # echo $batch_size
+
+        ./rnn_lm/train_plm_fed_perbook.py \
+          --start-epoch $((epoch-9)) \
+          --world-size 3 \
+          --num-epochs $((epoch+1)) \
+          --use-fp16 0 \
+          --embedding-dim 2048 \
+          --hidden-dim 2048 \
+          --num-layers 3 \
+          --batch-size $batch_size \
+          --exp-dir rnn_lm/exp_book_$book_id \
+          --save-last-epoch true \
+          --lm-data-path data/lm_training_bpe_500_userlibri \
+          --lm-data-name "$book_id" \
+          --alpha ${alpha[$i]} \
+          --beta ${beta[$i]}
+        
+        # if [ "$epoch" != 40 ]; then
+        #   if [ -f rnn_lm/exp_$id/epoch-$((epoch-5)).pt ]; then rm rnn_lm/exp_$id/epoch-$((epoch-5)).pt; fi
+        # fi
+
+        if [ -f rnn_lm/exp_book_$book_id/epoch-30.pt ]; then rm rnn_lm/exp_book_$book_id/epoch-30.pt; fi
+        ./pruned_transducer_stateless5/decode_userlibri.py \
+          --epoch 30 \
+          --avg 15 \
+          --exp-dir ./pruned_transducer_stateless5/exp_layer12 \
+          --max-duration 400 \
+          --decoding-method modified_beam_search_lm_shallow_fusion \
+          --beam-size 4 \
+          --num-encoder-layer 12 \
+          --lm-type rnn \
+          --lm-scale 0.15 \
+          --lm-exp-dir rnn_lm/exp_book_$book_id \
+          --lm-epoch $epoch \
+          --lm-avg 1 \
+          --rnn-lm-num-layers 3 \
+          --use-shallow-fusion 1 \
+          --rnn-lm-tie-weights 1 \
+          --test-id "$data_ids" \
+          --book-id "$book_id" \
+          --result-path $result_path
+          
+      done < "$filename"
+
+      lm_list=pruned_transducer_stateless5/results_per_book_fed4_"$epoch"_${alpha[$i]}_${beta[$i]}.txt
+      ./utils/average_parameters_fed.py \
+        --lm-list ${lm_list} \
+        --start-epoch $((epoch+1)) \
+        --exp-dir rnn_lm/exp_fed_perbook
+      
+      while read line; do
+        book_id=$(echo "$line" | cut -f1)
+        data_ids=$(echo "$line" | cut -f2-)
+        ./pruned_transducer_stateless5/decode_userlibri.py \
+          --epoch 30 \
+          --avg 15 \
+          --exp-dir ./pruned_transducer_stateless5/exp_layer12 \
+          --max-duration 400 \
+          --decoding-method modified_beam_search_lm_shallow_fusion \
+          --beam-size 4 \
+          --num-encoder-layer 12 \
+          --lm-type rnn \
+          --lm-scale 0.15 \
+          --lm-exp-dir rnn_lm/exp_fed_perbook \
+          --lm-epoch $epoch \
+          --lm-avg 1 \
+          --rnn-lm-num-layers 3 \
+          --use-shallow-fusion 1 \
+          --rnn-lm-tie-weights 1 \
+          --test-id "$data_ids" \
+          --book-id "$book_id" \
+          --result-path $result_path2
+      done < "$filename"
+    done
+
+    echo "Stage 23-1: overfitting stage"
+
+    for epoch in 65 70 75 80; do
+      
+      result_path=/home/lee/Workspace/icefall/egs/librispeech/ASR/pruned_transducer_stateless5/results_per_book_fed4_overfitting_"$epoch".txt
+
+      if [ -f $result_path ]; then rm $result_path; fi
+      while read line; do
+        book_id=$(echo "$line" | cut -f1)
+        data_ids=$(echo "$line" | cut -f2-)
+        cp rnn_lm/exp_fed_perbook/epoch-60.pt rnn_lm/exp_book_$book_id/epoch-60.pt
+        if [ $book_id -eq 2002 ]
+        then
+          batch_size=50
+        else
+          batch_size=100
+        fi
+        ./rnn_lm/train_plm.py \
+          --start-epoch $((epoch-4)) \
+          --world-size 3 \
+          --num-epochs $((epoch+1)) \
+          --use-fp16 0 \
+          --embedding-dim 2048 \
+          --hidden-dim 2048 \
+          --num-layers 3 \
+          --batch-size $batch_size \
+          --exp-dir rnn_lm/exp_book_$book_id \
+          --save-last-epoch true \
+          --lm-data-path data/lm_training_bpe_500_userlibri \
+          --lm-data-name "$book_id"
+        
+        ./pruned_transducer_stateless5/decode_userlibri.py \
+          --epoch 30 \
+          --avg 15 \
+          --exp-dir ./pruned_transducer_stateless5/exp_layer12 \
+          --max-duration 400 \
+          --decoding-method modified_beam_search_lm_shallow_fusion \
+          --beam-size 4 \
+          --num-encoder-layer 12 \
+          --lm-type rnn \
+          --lm-scale 0.15 \
+          --lm-exp-dir rnn_lm/exp_book_$book_id \
+          --lm-epoch $epoch \
+          --lm-avg 1 \
+          --rnn-lm-num-layers 3 \
+          --use-shallow-fusion 1 \
+          --rnn-lm-tie-weights 1 \
+          --test-id "$data_ids" \
+          --book-id "$book_id" \
+          --result-path $result_path
+      done < "$filename"
+    done
+  done
+
+  # while read line; do
+  #   book_id=$(echo "$line" | cut -f1)
+  #   data_ids=$(echo "$line" | cut -f2-)
+  #   ./pruned_transducer_stateless5/decode_userlibri.py \
+  #     --epoch 30 \
+  #     --avg 15 \
+  #     --exp-dir ./pruned_transducer_stateless5/exp_layer12 \
+  #     --max-duration 400 \
+  #     --decoding-method modified_beam_search_lm_shallow_fusion \
+  #     --beam-size 4 \
+  #     --num-encoder-layer 12 \
+  #     --lm-type rnn \
+  #     --lm-scale 0.15 \
+  #     --lm-exp-dir rnn_lm/exp \
+  #     --lm-epoch 30 \
+  #     --lm-avg 1 \
+  #     --rnn-lm-num-layers 3 \
+  #     --use-shallow-fusion 1 \
+  #     --rnn-lm-tie-weights 1 \
+  #     --test-id "$data_ids" \
+  #     --book-id "$book_id" \
+  #     --result-path pruned_transducer_stateless5/result_per_book_baseline.txt
+  # done < "$filename"
+fi
+
+if [ $stage -le 24 ] && [ $stop_stage -ge 24 ]; then
+  echo "Stage 24: train and average, finetuning for 10epoch"
+  mkdir -p rnn_lm/exp_averaged
+  if [ ! -f rnn_lm/exp_averaged/epoch-30.pt ]; then cp rnn_lm/exp/epoch-30.pt rnn_lm/exp_averaged; fi
+  filename="data/book_to_data.txt"
+  alpha=(1e-4)
+  beta=(1e-1)
+
+  for epoch in 40 50 60; do
+    result_path=/home/lee/Workspace/icefall/egs/librispeech/ASR/pruned_transducer_stateless5/results_per_book2_"$epoch".txt
+    result_path2=/home/lee/Workspace/icefall/egs/librispeech/ASR/pruned_transducer_stateless5/results_per_book2_"$epoch"_avg.txt
+
+    if [ -f $result_path ]; then rm $result_path; fi
+    if [ -f $result_path2 ]; then rm $result_path2; fi
+
+    while read line; do
+      book_id=$(echo "$line" | cut -f1)
+      data_ids=$(echo "$line" | cut -f2-)
+      # echo $line
+      if [ ! -d rnn_lm/exp_book_$book_id ]; then mkdir -p rnn_lm/exp_book_$book_id; fi
+      cp rnn_lm/exp_averaged/epoch-$((epoch-10)).pt rnn_lm/exp_book_$book_id/epoch-$((epoch-10)).pt
+      
+      if [ $book_id -eq 2002 ]
+      then
+        batch_size=50
+      else
+        batch_size=100
+      fi
+      # echo $batch_size
+
+      ./rnn_lm/train_plm.py \
+        --start-epoch $((epoch-9)) \
+        --world-size 3 \
+        --num-epochs $((epoch+1)) \
+        --use-fp16 0 \
+        --embedding-dim 2048 \
+        --hidden-dim 2048 \
+        --num-layers 3 \
+        --batch-size $batch_size \
+        --exp-dir rnn_lm/exp_book_$book_id \
+        --save-last-epoch true \
+        --lm-data-path data/lm_training_bpe_500_userlibri \
+        --lm-data-name "$book_id" \
+      
+      # if [ "$epoch" != 40 ]; then
+      #   if [ -f rnn_lm/exp_$id/epoch-$((epoch-5)).pt ]; then rm rnn_lm/exp_$id/epoch-$((epoch-5)).pt; fi
+      # fi
+      if [ -f rnn_lm/exp_book_$book_id/epoch-30.pt ]; then rm rnn_lm/exp_book_$book_id/epoch-30.pt; fi
+      ./pruned_transducer_stateless5/decode_userlibri.py \
+        --epoch 30 \
+        --avg 15 \
+        --exp-dir ./pruned_transducer_stateless5/exp_layer12 \
+        --max-duration 400 \
+        --decoding-method modified_beam_search_lm_shallow_fusion \
+        --beam-size 4 \
+        --num-encoder-layer 12 \
+        --lm-type rnn \
+        --lm-scale 0.15 \
+        --lm-exp-dir rnn_lm/exp_book_$book_id \
+        --lm-epoch $epoch \
+        --lm-avg 1 \
+        --rnn-lm-num-layers 3 \
+        --use-shallow-fusion 1 \
+        --rnn-lm-tie-weights 1 \
+        --test-id "$data_ids" \
+        --book-id "$book_id" \
+        --result-path $result_path
+        
+    done < "$filename"
+
+    lm_list=pruned_transducer_stateless5/results_per_book2_"$epoch".txt
+    ./utils/average_parameters_fed.py \
+      --lm-list ${lm_list} \
+      --start-epoch $((epoch+1)) \
+      --exp-dir rnn_lm/exp_averaged
+    
+    while read line; do
+      book_id=$(echo "$line" | cut -f1)
+      data_ids=$(echo "$line" | cut -f2-)
+      ./pruned_transducer_stateless5/decode_userlibri.py \
+        --epoch 30 \
+        --avg 15 \
+        --exp-dir ./pruned_transducer_stateless5/exp_layer12 \
+        --max-duration 400 \
+        --decoding-method modified_beam_search_lm_shallow_fusion \
+        --beam-size 4 \
+        --num-encoder-layer 12 \
+        --lm-type rnn \
+        --lm-scale 0.15 \
+        --lm-exp-dir rnn_lm/exp_averaged \
+        --lm-epoch $epoch \
+        --lm-avg 1 \
+        --rnn-lm-num-layers 3 \
+        --use-shallow-fusion 1 \
+        --rnn-lm-tie-weights 1 \
+        --test-id "$data_ids" \
+        --book-id "$book_id" \
+        --result-path $result_path2
+    done < "$filename"
+  done
+  echo "Stage 20-1: overfitting stage"
+
+  for epoch in 65 70 75 80; do
+    
+    result_path=/home/lee/Workspace/icefall/egs/librispeech/ASR/pruned_transducer_stateless5/results_per_book2_overfitting_"$epoch".txt
+
+    if [ -f $result_path ]; then rm $result_path; fi
+    while read line; do
+      book_id=$(echo "$line" | cut -f1)
+      data_ids=$(echo "$line" | cut -f2-)
+      cp rnn_lm/exp_averaged/epoch-60.pt rnn_lm/exp_book_$book_id/epoch-60.pt
       if [ $book_id -eq 2002 ]
       then
         batch_size=50

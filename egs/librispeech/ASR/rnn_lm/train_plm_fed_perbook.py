@@ -513,13 +513,6 @@ def compute_grad(
             loss_info["frames"] = num_tokens + 1
             loss_info["loss"] = loss_1.detach().item()
 
-
-
-            # print(loss_1,loss_2)
-            # print(loss_1.mean(),loss_2.mean())
-            # print(loss_1.max(),loss_2.max())
-            # if loss_1.isnan() or loss_2.isnan():
-            #     exit()
             return grads, loss_info
 
         else:
@@ -583,9 +576,6 @@ def train_one_epoch(
         x1, y1, sentence_lengths1 = batch1
         x2, y2, sentence_lengths2 = batch2
         x3, y3, sentence_lengths3 = batch3
-        # print(batch1)
-        # print(batch2)
-        # print(batch3)
         batch_size = x1.size(0)
         optimizer.zero_grad()
         with torch.cuda.amp.autocast(enabled=params.use_fp16):
@@ -630,14 +620,10 @@ def train_one_epoch(
         tot_loss = (tot_loss * (1 - 1 / params.reset_interval)) + loss_info
 
         
-        clip_grad_norm_(model.parameters(), 5.0, 2.0)
+        # clip_grad_norm_(model.parameters(), 5.0, 2.0)
         optimizer.step()
 
         if batch_idx % params.log_interval == 0:
-            # print(x3)
-            # print(y3)
-            # # Note: "frames" here means "num_tokens"
-            # print(loss_info["loss"], loss_info["frames"])
             try:
                 this_batch_ppl = math.exp(loss_info["loss"] / loss_info["frames"])
                 tot_ppl = math.exp(tot_loss["loss"] / tot_loss["frames"])
@@ -691,9 +677,6 @@ def train_one_epoch(
                 tb_writer.add_scalar(
                     "train/valid_ppl", valid_ppl, params.batch_idx_train
                 )
-    # print(tot_loss.keys())
-    # print(tot_loss["loss"])
-    # print(tot_loss["frames"])
     try:
         loss_value = tot_loss["loss"] / tot_loss["frames"]
     except OverflowError:
@@ -813,18 +796,18 @@ def run(rank, world_size, args):
         random.shuffle(order2)
     while any(order3[i] == order1[i] or order3[i] == order2[i] for i in range(len(order1))):
         random.shuffle(order3)
-    
+
     train_dl2 = get_dataloader_fed(
         filename=params.lm_data_name,
         is_distributed=is_distributed,
         params=params,
-        order=order1
+        order=order2
     )
     train_dl3 = get_dataloader_fed(
         filename=params.lm_data_name,
         is_distributed=is_distributed,
         params=params,
-        order=order1
+        order=order3
     )
     logging.info(f"Loading LM validation data from {params.lm_data_valid}")
     valid_dl = get_dataloader(

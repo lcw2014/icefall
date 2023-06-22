@@ -262,7 +262,7 @@ def load_checkpoint_if_available(
     if params.start_epoch <= 0:
         return
 
-    filename = f"rnn_lm/exp_book_{id}/epoch-{params.start_epoch-1}.pt"
+    filename = f"rnn_lm/exp_{id}/epoch-{params.start_epoch-1}.pt"
 
     logging.info(f"Loading checkpoint: {filename}")
     saved_params = load_checkpoint(

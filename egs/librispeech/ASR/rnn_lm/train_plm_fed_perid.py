@@ -341,13 +341,13 @@ def save_checkpoint(
         rank=rank,
     )
 
-    if params.best_train_epoch == params.cur_epoch:
-        best_train_filename = params.exp_dir / "best-train-loss.pt"
-        copyfile(src=filename, dst=best_train_filename)
+    # if params.best_train_epoch == params.cur_epoch:
+    #     best_train_filename = params.exp_dir / "best-train-loss.pt"
+    #     copyfile(src=filename, dst=best_train_filename)
 
-    if params.best_valid_epoch == params.cur_epoch:
-        best_valid_filename = params.exp_dir / "best-valid-loss.pt"
-        copyfile(src=filename, dst=best_valid_filename)
+    # if params.best_valid_epoch == params.cur_epoch:
+    #     best_valid_filename = params.exp_dir / "best-valid-loss.pt"
+    #     copyfile(src=filename, dst=best_valid_filename)
 
 
 def compute_loss(
@@ -387,7 +387,7 @@ def compute_loss(
         loss_info = MetricsTracker()
         # Note: Due to how MetricsTracker() is designed,
         # we use "frames" instead of "num_tokens" as a key here
-        loss_info["frames"] = num_tokens
+        loss_info["frames"] = num_tokens + 1
         loss_info["loss"] = loss.detach().item()
     return loss, loss_info
 
@@ -429,6 +429,15 @@ def compute_validation_loss(
 
     return tot_loss
 
+def gradient_clip_(
+    grads: torch.Tensor,
+):
+    total_norm = torch.norm(torch.stack([torch.norm(grad.detach(), 2.0) for grad in grads]), 2.0)
+    clip_coef = 1.0 / (total_norm + 1e-6)
+    clip_coef_clamped = torch.clamp(clip_coef, max=1.0)
+    # print(total_norm,clip_coef_clamped)
+    for grad in grads:
+        grad.mul_(clip_coef_clamped.to(grad.device))
 
 def compute_grad(
     model: nn.Module,
@@ -480,6 +489,8 @@ def compute_grad(
             loss_1 = loss_1.sum()
             grads_1 = torch.autograd.grad(loss_1, model.parameters())
 
+            gradient_clip_(grads_1)
+
             model.load_state_dict(dummy_model_params_2, strict=False)
             loss_2 = model(x, y, sentence_lengths)
             # loss_2 = F.cross_entropy(
@@ -487,6 +498,8 @@ def compute_grad(
             # )
             loss_2 = loss_2.sum()
             grads_2 = torch.autograd.grad(loss_2, model.parameters())
+
+            gradient_clip_(grads_2)
 
             model.load_state_dict(frz_model_params)
 
@@ -497,8 +510,8 @@ def compute_grad(
             
             loss_info = MetricsTracker()
             num_tokens = sentence_lengths.sum().item()
-            loss_info["frames"] = num_tokens
-            loss_info["loss"] = loss_2.detach().item()
+            loss_info["frames"] = num_tokens + 1
+            loss_info["loss"] = loss_1.detach().item()
 
             return grads, loss_info
 
@@ -509,6 +522,7 @@ def compute_grad(
             # )
             loss = loss.sum()
             grads = torch.autograd.grad(loss, model.parameters())
+            gradient_clip_(grads)
     
             return grads
         # loss = nll.sum()
@@ -563,6 +577,7 @@ def train_one_epoch(
         x2, y2, sentence_lengths2 = batch2
         x3, y3, sentence_lengths3 = batch3
         batch_size = x1.size(0)
+        optimizer.zero_grad()
         with torch.cuda.amp.autocast(enabled=params.use_fp16):
             temp_model = deepcopy(model)
             grads = compute_grad(
@@ -594,23 +609,27 @@ def train_one_epoch(
                 v=grads_1st,
                 second_order_grads=True,
             )
+            
             for param, grad1, grad2 in zip(
                 model.parameters(), grads_1st, grads_2nd
             ):
-                param.data.sub_(params.beta * grad1 - params.beta * params.alpha * grad2)
+                param.grad = params.beta * grad1 - params.beta * params.alpha * grad2
+                # param.data.sub_(params.beta * grad1 - params.beta * params.alpha * grad2)
 
         # summary stats
         tot_loss = (tot_loss * (1 - 1 / params.reset_interval)) + loss_info
 
-        # optimizer.zero_grad()
-        # loss.backward()
+        
         # clip_grad_norm_(model.parameters(), 5.0, 2.0)
-        # optimizer.step()
+        optimizer.step()
 
         if batch_idx % params.log_interval == 0:
-            # Note: "frames" here means "num_tokens"
-            this_batch_ppl = math.exp(loss_info["loss"] / loss_info["frames"])
-            tot_ppl = math.exp(tot_loss["loss"] / tot_loss["frames"])
+            try:
+                this_batch_ppl = math.exp(loss_info["loss"] / loss_info["frames"])
+                tot_ppl = math.exp(tot_loss["loss"] / tot_loss["frames"])
+            except OverflowError:
+                this_batch_ppl = math.inf
+                tot_ppl = math.inf
 
             logging.info(
                 f"Epoch {params.cur_epoch}, "
@@ -641,8 +660,10 @@ def train_one_epoch(
                 world_size=world_size,
             )
             model.train()
-
-            valid_ppl = math.exp(valid_info["loss"] / valid_info["frames"])
+            try:
+                valid_ppl = math.exp(valid_info["loss"] / valid_info["frames"])
+            except OverflowError:
+                valid_ppl = math.inf
             logging.info(
                 f"Epoch {params.cur_epoch}, validation: {valid_info}, "
                 f"ppl: {valid_ppl}"
@@ -656,8 +677,11 @@ def train_one_epoch(
                 tb_writer.add_scalar(
                     "train/valid_ppl", valid_ppl, params.batch_idx_train
                 )
+    try:
+        loss_value = tot_loss["loss"] / tot_loss["frames"]
+    except OverflowError:
+        loss_value = math.inf
 
-    loss_value = tot_loss["loss"] / tot_loss["frames"]
     params.train_loss = loss_value
     if params.train_loss < params.best_train_loss:
         params.best_train_epoch = params.cur_epoch
@@ -764,6 +788,7 @@ def run(rank, world_size, args):
         is_distributed=is_distributed,
         params=params,
     )
+
     order1 = list(range(train_dl.dataset.__len__()))
     order2 = list(order1)
     order3 = list(order2)

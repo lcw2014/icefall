@@ -336,13 +336,13 @@ def save_checkpoint(
         rank=rank,
     )
 
-    if params.best_train_epoch == params.cur_epoch:
-        best_train_filename = params.exp_dir / "best-train-loss.pt"
-        copyfile(src=filename, dst=best_train_filename)
+    # if params.best_train_epoch == params.cur_epoch:
+    #     best_train_filename = params.exp_dir / "best-train-loss.pt"
+    #     copyfile(src=filename, dst=best_train_filename)
 
-    if params.best_valid_epoch == params.cur_epoch:
-        best_valid_filename = params.exp_dir / "best-valid-loss.pt"
-        copyfile(src=filename, dst=best_valid_filename)
+    # if params.best_valid_epoch == params.cur_epoch:
+    #     best_valid_filename = params.exp_dir / "best-valid-loss.pt"
+    #     copyfile(src=filename, dst=best_valid_filename)
 
 
 def compute_loss(

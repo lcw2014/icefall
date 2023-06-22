@@ -432,7 +432,7 @@ def get_parser():
     )
 
     parser.add_argument(
-        "--spk-id",
+        "--book-id",
         type=str,
         help="add surplus rnn layer to existing rnn layers",
     )
@@ -1039,6 +1039,8 @@ def main():
             test_userlibri_cuts = librispeech.test_userlibri_cuts(tid)
         else:
             test_userlibri_cuts += librispeech.test_userlibri_cuts(tid)
+    # print(test_userlibri_cuts.__len__())
+    # print(args)
     if test_userlibri_cuts.__len__() <= 30:
         args.num_buckets = test_userlibri_cuts.__len__()
         librispeech = LibriSpeechAsrDataModule(args)
@@ -1051,16 +1053,19 @@ def main():
             else:
                 test_userlibri_cuts += librispeech.test_userlibri_cuts(tid)
 
+        
+
+
     # test_clean_dl = librispeech.test_dataloaders(test_clean_cuts)
     # test_other_dl = librispeech.test_dataloaders(test_other_cuts)
-    test_userlibri_dl = librispeech.test_dataloaders(test_userlibri_cuts)
-    # valid_cuts = librispeech.dev_clean_cuts()
-    # valid_cuts += librispeech.dev_other_cuts()
-    # test_userlibri_dl = librispeech.valid_dataloaders(valid_cuts)
+    # test_userlibri_dl = librispeech.test_dataloaders(test_userlibri_cuts)
+    valid_cuts = librispeech.dev_clean_cuts()
+    valid_cuts += librispeech.dev_other_cuts()
+    test_userlibri_dl = librispeech.valid_dataloaders(valid_cuts)
 
     # test_sets = ["test-clean", "test-other"]
     # test_dl = [test_clean_dl, test_other_dl]
-    test_sets = [f"userlibri-{args.spk_id}"]
+    test_sets = [f"userlibri-{args.book_id}"]
     test_dl = [test_userlibri_dl]
 
     for test_set, test_dl in zip(test_sets, test_dl):
