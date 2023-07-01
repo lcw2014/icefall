@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright    2021  Xiaomi Corp.        (authors: Xiaoyu Yang)
+# Copyright    2021  Xiaomi Corp.        (authors: Fangjun Kuang)
 #
 # See ../../../../LICENSE for clarification regarding multiple authors
 #
@@ -14,7 +14,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 
 """
 Usage:
@@ -33,14 +32,14 @@ import logging
 import math
 from pathlib import Path
 from shutil import copyfile
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 import sys
 
 import torch
 import torch.multiprocessing as mp
 import torch.nn as nn
 import torch.optim as optim
-from dataset import get_dataloader, get_dataloader_perid
+from dataset import get_dataloader, get_dataloader_perid, get_dataloader_fed
 from lhotse.utils import fix_random_seed
 from model import TransformerLM
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -54,7 +53,10 @@ from icefall.env import get_env_info
 from icefall.utils import AttributeDict, MetricsTracker, setup_logger, str2bool
 
 import copy
-
+from copy import deepcopy
+from collections import OrderedDict
+import torch.nn.functional as F
+import random
 
 def get_parser():
     parser = argparse.ArgumentParser(
@@ -166,6 +168,55 @@ def get_parser():
         help="The seed for random generators intended for reproducibility",
     )
 
+    parser.add_argument(
+        "--train-n-layer",
+        type=int,
+        default=0,
+        help="freeze rnn layer",
+    )
+
+    parser.add_argument(
+        "--surplus-layer",
+        type=bool,
+        default=False,
+        help="add surplus rnn layer to existing rnn layers",
+    )
+
+    parser.add_argument(
+        "--copy-last-layer",
+        type=bool,
+        default=False,
+        help="",
+    )
+
+    parser.add_argument(
+        "--adapter",
+        type=bool,
+        default=False,
+        help="",
+    )
+
+    parser.add_argument(
+        "--save-last-epoch",
+        type=bool,
+        default=False,
+        help="",
+    )
+
+    parser.add_argument(
+        "--lm-data-name",
+        type=str,
+        help="",
+    )
+
+    parser.add_argument(
+        "--lm-data-path",
+        type=str,
+        help="",
+    )
+    parser.add_argument("--alpha", type=float, default=1e-2)
+    parser.add_argument("--beta", type=float, default=1e-3)
+
     return parser
 
 
@@ -174,7 +225,7 @@ def get_params() -> AttributeDict:
 
     params = AttributeDict(
         {
-            "max_sent_len": 200,
+            "max_sent_len": 90,
             "sos_id": 1,
             "eos_id": 1,
             "blank_id": 0,
@@ -237,16 +288,16 @@ def load_checkpoint_if_available(
         optimizer=optimizer,
         scheduler=scheduler,
     )
-
-    keys = [
-        "best_train_epoch",
-        "best_valid_epoch",
-        "batch_idx_train",
-        "best_train_loss",
-        "best_valid_loss",
-    ]
-    for k in keys:
-        params[k] = saved_params[k]
+    # print(saved_params)
+    # keys = [
+    #     "best_train_epoch",
+    #     "best_valid_epoch",
+    #     "batch_idx_train",
+    #     "best_train_loss",
+    #     "best_valid_loss",
+    # ]
+    # for k in keys:
+    #     params[k] = saved_params[k]
 
     return saved_params
 
@@ -278,13 +329,13 @@ def save_checkpoint(
         rank=rank,
     )
 
-    if params.best_train_epoch == params.cur_epoch:
-        best_train_filename = params.exp_dir / "best-train-loss.pt"
-        copyfile(src=filename, dst=best_train_filename)
+    # if params.best_train_epoch == params.cur_epoch:
+    #     best_train_filename = params.exp_dir / "best-train-loss.pt"
+    #     copyfile(src=filename, dst=best_train_filename)
 
-    if params.best_valid_epoch == params.cur_epoch:
-        best_valid_filename = params.exp_dir / "best-valid-loss.pt"
-        copyfile(src=filename, dst=best_valid_filename)
+    # if params.best_valid_epoch == params.cur_epoch:
+    #     best_valid_filename = params.exp_dir / "best-valid-loss.pt"
+    #     copyfile(src=filename, dst=best_valid_filename)
 
 
 def compute_loss(
@@ -297,7 +348,7 @@ def compute_loss(
     """Compute the negative log-likelihood loss given a model and its input.
     Args:
       model:
-        The NN model,
+        The NN model, e.g., RnnLmModel.
       x:
         A 2-D tensor. Each row contains BPE token IDs for a sentence. Also,
         each row starts with SOS ID.
@@ -324,7 +375,7 @@ def compute_loss(
         loss_info = MetricsTracker()
         # Note: Due to how MetricsTracker() is designed,
         # we use "frames" instead of "num_tokens" as a key here
-        loss_info["frames"] = num_tokens
+        loss_info["frames"] = num_tokens + 1
         loss_info["loss"] = loss.detach().item()
     return loss, loss_info
 
@@ -366,12 +417,117 @@ def compute_validation_loss(
 
     return tot_loss
 
+def gradient_clip_(
+    grads: torch.Tensor,
+):
+    total_norm = torch.norm(torch.stack([torch.norm(grad.detach(), 2.0) for grad in grads]), 2.0)
+    clip_coef = 1.0 / (total_norm + 1e-6)
+    clip_coef_clamped = torch.clamp(clip_coef, max=1.0)
+    # print(total_norm,clip_coef_clamped)
+    for grad in grads:
+        grad.mul_(clip_coef_clamped.to(grad.device))
+
+def compute_grad(
+    model: nn.Module,
+    x: torch.Tensor,
+    y: torch.Tensor,
+    sentence_lengths: torch.Tensor,
+    is_training: bool,
+    params: AttributeDict,
+    v: Union[Tuple[torch.Tensor, ...], None] = None,
+    second_order_grads:bool = False,
+) -> Tuple[torch.Tensor, MetricsTracker]:
+    """Compute the negative log-likelihood loss given a model and its input.
+    Args:
+      model:
+        The NN model, e.g., RnnLmModel.
+      x:
+        A 2-D tensor. Each row contains BPE token IDs for a sentence. Also,
+        each row starts with SOS ID.
+      y:
+        A 2-D tensor. Each row is a shifted version of the corresponding row
+        in `x` but ends with an EOS ID (before padding).
+     sentence_lengths:
+       A 1-D tensor containing number of tokens of each sentence
+       before padding.
+     is_training:
+       True for training. False for validation.
+    """
+    with torch.set_grad_enabled(is_training):
+        device = model.device
+        x = x.to(device)
+        y = y.to(device)
+        sentence_lengths = sentence_lengths.to(device)
+
+        if second_order_grads:
+            frz_model_params = deepcopy(model.state_dict())
+            delta = 1e-3
+            dummy_model_params_1 = OrderedDict()
+            dummy_model_params_2 = OrderedDict()
+            with torch.no_grad():
+                for (layer_name, param), grad in zip(model.named_parameters(), v):
+                    dummy_model_params_1.update({layer_name: param + delta * grad})
+                    dummy_model_params_2.update({layer_name: param - delta * grad})
+            
+            model.load_state_dict(dummy_model_params_1, strict=False)
+            loss_1 = model(x, y, sentence_lengths)
+            # loss_1 = F.cross_entropy(
+            # logit_1.reshape(-1, params.vocab_size), y.reshape(-1), reduction="none"
+            # )
+            loss_1 = loss_1.sum()
+            grads_1 = torch.autograd.grad(loss_1, model.parameters())
+
+            gradient_clip_(grads_1)
+
+            model.load_state_dict(dummy_model_params_2, strict=False)
+            loss_2 = model(x, y, sentence_lengths)
+            # loss_2 = F.cross_entropy(
+            # logit_2.reshape(-1, params.vocab_size), y.reshape(-1), reduction="none"
+            # )
+            loss_2 = loss_2.sum()
+            grads_2 = torch.autograd.grad(loss_2, model.parameters())
+
+            gradient_clip_(grads_2)
+
+            model.load_state_dict(frz_model_params)
+
+            grads = []
+            with torch.no_grad():
+                for g1, g2 in zip(grads_1, grads_2):
+                    grads.append((g1 - g2) / (2 * delta))
+            
+            loss_info = MetricsTracker()
+            num_tokens = sentence_lengths.sum().item()
+            loss_info["frames"] = num_tokens + 1
+            loss_info["loss"] = loss_1.detach().item()
+
+            return grads, loss_info
+
+        else:
+            loss = model(x,y, sentence_lengths)
+            # loss = F.cross_entropy(
+            # logit.reshape(-1, params.vocab_size), y.reshape(-1), reduction="none"
+            # )
+            loss = loss.sum()
+            grads = torch.autograd.grad(loss, model.parameters())
+            gradient_clip_(grads)
+    
+            return grads
+        # loss = nll.sum()
+
+        # num_tokens = sentence_lengths.sum().item()
+
+        # loss_info = MetricsTracker()
+        # # Note: Due to how MetricsTracker() is designed,
+        # # we use "frames" instead of "num_tokens" as a key here
+        # loss_info["frames"] = num_tokens
+        # loss_info["loss"] = loss.detach().item()
 
 def train_one_epoch(
     params: AttributeDict,
     model: nn.Module,
     optimizer: torch.optim.Optimizer,
-    train_dl: torch.utils.data.DataLoader,
+    train_dl: zip,
     valid_dl: torch.utils.data.DataLoader,
     tb_writer: Optional[SummaryWriter] = None,
     world_size: int = 1,
@@ -403,30 +559,66 @@ def train_one_epoch(
     tot_loss = MetricsTracker()
 
     for batch_idx, batch in enumerate(train_dl):
+        batch1, batch2, batch3 = batch[0], batch[1], batch[2]
         params.batch_idx_train += 1
-        x, y, sentence_lengths = batch
-        batch_size = x.size(0)
+        x1, y1, sentence_lengths1 = batch1
+        x2, y2, sentence_lengths2 = batch2
+        x3, y3, sentence_lengths3 = batch3
+        batch_size = x1.size(0)
+        optimizer.zero_grad()
         with torch.cuda.amp.autocast(enabled=params.use_fp16):
-            loss, loss_info = compute_loss(
-                model=model,
-                x=x,
-                y=y,
-                sentence_lengths=sentence_lengths,
+            temp_model = deepcopy(model)
+            grads = compute_grad(
+                model=temp_model,
+                x=x1,
+                y=y1,
+                sentence_lengths=sentence_lengths1,
                 is_training=True,
+                params=params,
             )
+            for param, grad in zip(temp_model.parameters(), grads):
+                param.data.sub_(params.alpha * grad)
+            grads_1st = compute_grad(
+                model=temp_model,
+                x=x2,
+                y=y2,
+                sentence_lengths=sentence_lengths2,
+                is_training=True,
+                params=params,
+            )
+
+            grads_2nd, loss_info = compute_grad(
+                model=model,
+                x=x3,
+                y=y3,
+                sentence_lengths=sentence_lengths3,
+                is_training=True,
+                params=params,
+                v=grads_1st,
+                second_order_grads=True,
+            )
+            
+            for param, grad1, grad2 in zip(
+                model.parameters(), grads_1st, grads_2nd
+            ):
+                param.grad = params.beta * grad1 - params.beta * params.alpha * grad2
+                # param.data.sub_(params.beta * grad1 - params.beta * params.alpha * grad2)
 
         # summary stats
         tot_loss = (tot_loss * (1 - 1 / params.reset_interval)) + loss_info
 
-        optimizer.zero_grad()
-        loss.backward()
-        clip_grad_norm_(model.parameters(), 5.0, 2.0)
+        
+        # clip_grad_norm_(model.parameters(), 5.0, 2.0)
+        
         optimizer.step()
 
         if batch_idx % params.log_interval == 0:
-            # Note: "frames" here means "num_tokens"
-            this_batch_ppl = math.exp(loss_info["loss"] / loss_info["frames"])
-            tot_ppl = math.exp(tot_loss["loss"] / tot_loss["frames"])
+            try:
+                this_batch_ppl = math.exp(loss_info["loss"] / loss_info["frames"])
+                tot_ppl = math.exp(tot_loss["loss"] / tot_loss["frames"])
+            except OverflowError:
+                this_batch_ppl = math.inf
+                tot_ppl = math.inf
 
             logging.info(
                 f"Epoch {params.cur_epoch}, "
@@ -457,8 +649,10 @@ def train_one_epoch(
                 world_size=world_size,
             )
             model.train()
-
-            valid_ppl = math.exp(valid_info["loss"] / valid_info["frames"])
+            try:
+                valid_ppl = math.exp(valid_info["loss"] / valid_info["frames"])
+            except OverflowError:
+                valid_ppl = math.inf
             logging.info(
                 f"Epoch {params.cur_epoch}, validation: {valid_info}, "
                 f"ppl: {valid_ppl}"
@@ -472,13 +666,21 @@ def train_one_epoch(
                 tb_writer.add_scalar(
                     "train/valid_ppl", valid_ppl, params.batch_idx_train
                 )
+    try:
+        loss_value = tot_loss["loss"] / tot_loss["frames"]
+    except OverflowError:
+        loss_value = math.inf
 
-    loss_value = tot_loss["loss"] / tot_loss["frames"]
     params.train_loss = loss_value
     if params.train_loss < params.best_train_loss:
         params.best_train_epoch = params.cur_epoch
         params.best_train_loss = params.train_loss
-
+    
+def train_n_layer(model, args):
+    if args.train_n_layer != 4:
+        for name, param in model.named_parameters():
+            if list(name)[-1] != str(args.train_n_layer - 1):
+                param.requires_grad_(False)
 
 def run(rank, world_size, args):
     """
@@ -516,6 +718,7 @@ def run(rank, world_size, args):
     logging.info(f"Device: {device}")
 
     logging.info("About to create model")
+
     model = TransformerLM(
         vocab_size=params.vocab_size,
         d_model=params.encoder_dim,
@@ -532,7 +735,29 @@ def run(rank, world_size, args):
 
     checkpoints = load_checkpoint_if_available(params=params, model=model)
 
+    if params.copy_last_layer:
+        state_dict = model.state_dict()
+        new_state_dict = copy.deepcopy(model.state_dict())
+        for k in state_dict.keys():
+            if list(k)[-1] == str(params.num_layers -1):
+                name = '_'.join(k.split('.')[1].split('_')[0:2])
+                new_state_dict[f'rnn_surplus_layer.{name}_l0'] = state_dict[k]
+        
+        model.load_state_dict(new_state_dict)
+        if args.train_n_layer == 4:
+            for name, param in model.named_parameters():
+                if name.split('.')[0] != 'rnn_surplus_layer':
+                    param.requires_grad_(False)
+    
+    if params.adapter:
+        for n, p in model.named_parameters():
+            if n.split('.')[0] != 'adapter':
+                p.requires_grad_(False)
+
     model.to(device)
+    if params.train_n_layer:
+        train_n_layer(model,args)
+
     if is_distributed:
         model = DDP(model, device_ids=[rank])
 
@@ -543,17 +768,37 @@ def run(rank, world_size, args):
         lr=params.lr,
         weight_decay=params.weight_decay,
     )
-    if checkpoints:
+    if checkpoints.get('optimizer',None):
         logging.info("Load optimizer state_dict from checkpoint")
         optimizer.load_state_dict(checkpoints["optimizer"])
 
-    logging.info(f"Loading LM training data from {params.lm_data}")
-    train_dl = get_dataloader(
-        filename=params.lm_data,
+    logging.info(f"Loading LM training data from {params.lm_data_name}")
+    train_dl = get_dataloader_fed(
+        filename=params.lm_data_name,
         is_distributed=is_distributed,
         params=params,
     )
 
+    order1 = list(range(train_dl.dataset.__len__()))
+    order2 = list(order1)
+    order3 = list(order2)
+    while any(order2[i] == order1[i] for i in range(len(order1))):
+        random.shuffle(order2)
+    while any(order3[i] == order1[i] or order3[i] == order2[i] for i in range(len(order1))):
+        random.shuffle(order3)
+
+    train_dl2 = get_dataloader_fed(
+        filename=params.lm_data_name,
+        is_distributed=is_distributed,
+        params=params,
+        order=order2
+    )
+    train_dl3 = get_dataloader_fed(
+        filename=params.lm_data_name,
+        is_distributed=is_distributed,
+        params=params,
+        order=order3
+    )
     logging.info(f"Loading LM validation data from {params.lm_data_valid}")
     valid_dl = get_dataloader(
         filename=params.lm_data_valid,
@@ -565,25 +810,35 @@ def run(rank, world_size, args):
     for epoch in range(params.start_epoch, params.num_epochs):
         if is_distributed:
             train_dl.sampler.set_epoch(epoch)
+            train_dl2.sampler.set_epoch(epoch)
+            train_dl3.sampler.set_epoch(epoch)
 
         params.cur_epoch = epoch
-
+        train_zip = zip(train_dl, train_dl2, train_dl3)
         train_one_epoch(
             params=params,
             model=model,
             optimizer=optimizer,
-            train_dl=train_dl,
+            train_dl=train_zip,
             valid_dl=valid_dl,
             tb_writer=tb_writer,
             world_size=world_size,
         )
-
-        save_checkpoint(
-            params=params,
-            model=model,
-            optimizer=optimizer,
-            rank=rank,
-        )
+        if params.save_last_epoch:
+            if epoch == params.num_epochs -1:
+                save_checkpoint(
+                    params=params,
+                    model=model,
+                    optimizer=optimizer,
+                    rank=rank,
+                )
+        else:
+            save_checkpoint(
+                params=params,
+                model=model,
+                optimizer=optimizer,
+                rank=rank,
+            )
 
     logging.info("Done!")
 

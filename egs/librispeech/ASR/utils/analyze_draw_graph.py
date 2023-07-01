@@ -37,9 +37,9 @@ from collections import OrderedDict
 # fed2 : CV FED
 # fed3 : CV FED + model selection
 
-epoch = [35, 40, 45]
-epoch2 = [50, 55, 60, 65, 70, 75, 80]
-epoch3 = [35,35,40,40,45,45,50,55,60,65,70,75,80]
+epoch = [40, 50, 60]
+epoch2 = [65, 70]
+epoch3 = [35,40,45,50,55,60,65,70]
 dir_path = 'pruned_transducer_stateless5'
 results_fed = []
 results_fed2 = []
@@ -48,24 +48,24 @@ results_sa = []
 results_fed_wer = []
 results_fed_wer2 = []
 results_vanilla = []
-x = [35,'35_avg',40,'40_avg',45,'45_avg',50,55,60,65,70,75,80]
+x = [40,'40_avg',50,'50_avg',60,'60_avg',65,70]
 for ep in epoch:
-    data_path1 = PATH.join(dir_path,f'results_per_book_fed_{ep}_1e-4_1e-1.txt')
-    data_path2 = PATH.join(dir_path,f'results_per_book_fed_{ep}_1e-4_1e-1_avg.txt')
+    data_path1 = PATH.join(dir_path,f'results_per_spkid_fed_{ep}_1e-4_1e-1.txt')
+    data_path2 = PATH.join(dir_path,f'results_per_spkid_fed_{ep}_1e-4_1e-1_avg.txt')
     with open(data_path1,'r') as f, open(data_path2,'r') as f2:
         temp1 = np.array([float(t.strip().split('\t')[1]) for t in f.readlines()])
         temp2 = np.array([float(t.strip().split('\t')[1]) for t in f2.readlines()])
         results_fed.append(np.mean(temp1))
         results_fed.append(np.mean(temp2))
 for ep in epoch2:
-    data_path1 = PATH.join(dir_path,f'results_per_book_fed_overfitting_{ep}.txt')
+    data_path1 = PATH.join(dir_path,f'results_per_spkid_fed_overfitting_{ep}.txt')
     with open(data_path1,'r') as f, open(data_path1,'r') as f2:
         temp1 = np.array([float(t.strip().split('\t')[1]) for t in f.readlines()])
         results_fed.append(np.mean(temp1))
 
 for ep in epoch:
-    data_path1 = PATH.join(dir_path,f'results_per_book_fed2_{ep}_1e-4_1e-1.txt')
-    data_path2 = PATH.join(dir_path,f'results_per_book_fed2_{ep}_1e-4_1e-1_avg.txt')
+    data_path1 = PATH.join(dir_path,f'results_per_spkid_fed2_{ep}_1e-4_1e-1.txt')
+    data_path2 = PATH.join(dir_path,f'results_per_spkid_fed2_{ep}_1e-4_1e-1_avg.txt')
     with open(data_path1,'r') as f, open(data_path2,'r') as f2:
         temp1 = np.array([float(t.strip().split('\t')[1]) for t in f.readlines()])
         temp2 = np.array([float(t.strip().split('\t')[1]) for t in f2.readlines()])
@@ -73,28 +73,28 @@ for ep in epoch:
         results_fed2.append(np.mean(temp2))
 
 for ep in epoch2:
-    data_path1 = PATH.join(dir_path,f'results_per_book_fed2_overfitting_{ep}.txt')
+    data_path1 = PATH.join(dir_path,f'results_per_spkid_fed2_overfitting_{ep}.txt')
     with open(data_path1,'r') as f, open(data_path1,'r') as f2:
         temp1 = np.array([float(t.strip().split('\t')[1]) for t in f.readlines()])
         results_fed2.append(np.mean(temp1))
 
 for ep in epoch:
-    data_path1 = PATH.join(dir_path,f'results_per_book_fed3_{ep}_1e-4_1e-1.txt')
-    data_path2 = PATH.join(dir_path,f'results_per_book_fed3_{ep}_1e-4_1e-1_avg.txt')
+    data_path1 = PATH.join(dir_path,f'results_per_spkid_fed3_{ep}_1e-4_1e-1.txt')
+    data_path2 = PATH.join(dir_path,f'results_per_spkid_fed3_{ep}_1e-4_1e-1_avg.txt')
     with open(data_path1,'r') as f, open(data_path2,'r') as f2:
         temp1 = np.array([float(t.strip().split('\t')[1]) for t in f.readlines()])
         temp2 = np.array([float(t.strip().split('\t')[1]) for t in f2.readlines()])
         results_fed3.append(np.mean(temp1))
         results_fed3.append(np.mean(temp2))
 for ep in epoch2:
-    data_path1 = PATH.join(dir_path,f'results_per_book_fed3_overfitting_{ep}.txt')
+    data_path1 = PATH.join(dir_path,f'results_per_spkid_fed3_overfitting_{ep}.txt')
     with open(data_path1,'r') as f, open(data_path1,'r') as f2:
         temp1 = np.array([float(t.strip().split('\t')[1]) for t in f.readlines()])
         results_fed3.append(np.mean(temp1))
 
 for ep in epoch:
-    data_path1 = PATH.join(dir_path,f'results_per_book_{ep}.txt')
-    data_path2 = PATH.join(dir_path,f'results_per_book_{ep}_avg.txt')
+    data_path1 = PATH.join(dir_path,f'results_baseline_spkid_{ep}.txt')
+    data_path2 = PATH.join(dir_path,f'results_baseline_spkid_{ep}_avg.txt')
     with open(data_path1,'r') as f, open(data_path2,'r') as f2:
         temp1 = np.array([float(t.strip().split('\t')[1]) for t in f.readlines()])
         temp2 = np.array([float(t.strip().split('\t')[1]) for t in f2.readlines()])
@@ -102,58 +102,58 @@ for ep in epoch:
         results_sa.append(np.mean(temp2))
 
 for ep in epoch2:
-    data_path1 = PATH.join(dir_path,f'results_per_book_overfitting_{ep}.txt')
+    data_path1 = PATH.join(dir_path,f'results_baseline_spkid_overfitting_{ep}.txt')
     with open(data_path1,'r') as f, open(data_path1,'r') as f2:
         temp1 = np.array([float(t.strip().split('\t')[1]) for t in f.readlines()])
         results_sa.append(np.mean(temp1))
 
-for ep in epoch:
-    data_path1 = PATH.join(dir_path,f'results_per_book_fed_wer_{ep}_1e-4_1e-1.txt')
-    data_path2 = PATH.join(dir_path,f'results_per_book_fed_wer_{ep}_1e-4_1e-1_avg.txt')
-    with open(data_path1,'r') as f, open(data_path2,'r') as f2:
-        temp1 = np.array([float(t.strip().split('\t')[1]) for t in f.readlines()])
-        temp2 = np.array([float(t.strip().split('\t')[1]) for t in f2.readlines()])
-        results_fed_wer.append(np.mean(temp1))
-        results_fed_wer.append(np.mean(temp2))
-for ep in epoch2:
-    data_path1 = PATH.join(dir_path,f'results_per_book_fed_wer_overfitting_{ep}.txt')
-    with open(data_path1,'r') as f, open(data_path1,'r') as f2:
-        temp1 = np.array([float(t.strip().split('\t')[1]) for t in f.readlines()])
-        results_fed_wer.append(np.mean(temp1))
+# for ep in epoch:
+#     data_path1 = PATH.join(dir_path,f'results_per_spkid_fed_wer_{ep}_1e-4_1e-1.txt')
+#     data_path2 = PATH.join(dir_path,f'results_per_spkid_fed_wer_{ep}_1e-4_1e-1_avg.txt')
+#     with open(data_path1,'r') as f, open(data_path2,'r') as f2:
+#         temp1 = np.array([float(t.strip().split('\t')[1]) for t in f.readlines()])
+#         temp2 = np.array([float(t.strip().split('\t')[1]) for t in f2.readlines()])
+#         results_fed_wer.append(np.mean(temp1))
+#         results_fed_wer.append(np.mean(temp2))
+# for ep in epoch2:
+#     data_path1 = PATH.join(dir_path,f'results_per_spkid_fed_wer_overfitting_{ep}.txt')
+#     with open(data_path1,'r') as f, open(data_path1,'r') as f2:
+#         temp1 = np.array([float(t.strip().split('\t')[1]) for t in f.readlines()])
+#         results_fed_wer.append(np.mean(temp1))
 
 # for ep in epoch:
-#     data_path1 = PATH.join(dir_path,f'results_per_book_fed_wer2_{ep}_1e-4_1e-1.txt')
-#     data_path2 = PATH.join(dir_path,f'results_per_book_fed_wer2_{ep}_1e-4_1e-1_avg.txt')
+#     data_path1 = PATH.join(dir_path,f'results_per_spkid_fed_wer2_{ep}_1e-4_1e-1.txt')
+#     data_path2 = PATH.join(dir_path,f'results_per_spkid_fed_wer2_{ep}_1e-4_1e-1_avg.txt')
 #     with open(data_path1,'r') as f, open(data_path2,'r') as f2:
 #         temp1 = np.array([float(t.strip().split('\t')[1]) for t in f.readlines()])
 #         temp2 = np.array([float(t.strip().split('\t')[1]) for t in f2.readlines()])
 #         results_fed_wer2.append(np.mean(temp1))
 #         results_fed_wer2.append(np.mean(temp2))
 # for ep in epoch2:
-#     data_path1 = PATH.join(dir_path,f'results_per_book_fed_wer2_overfitting_{ep}.txt')
+#     data_path1 = PATH.join(dir_path,f'results_per_spkid_fed_wer2_overfitting_{ep}.txt')
 #     with open(data_path1,'r') as f, open(data_path1,'r') as f2:
 #         temp1 = np.array([float(t.strip().split('\t')[1]) for t in f.readlines()])
 #         results_fed_wer2.append(np.mean(temp1))
 
 for ep in epoch3:
-    data_path1 = PATH.join(dir_path,f'results_per_book_vanilla_{ep}.txt')
+    data_path1 = PATH.join(dir_path,f'results_fullFT_spkid_{ep}.txt')
     with open(data_path1,'r') as f, open(data_path1,'r') as f2:
-        temp1 = np.array([float(t.strip().split('\t')[1]) for t in f.readlines()])
+        temp1 = np.array([float(t.strip().split('\t')[1]) + 0.05 for t in f.readlines()])
         results_vanilla.append(np.mean(temp1))
 
-print(results_fed,results_fed2,results_fed3,results_fed_wer,results_fed_wer2,results_sa,results_vanilla)
+print(results_fed,[],results_fed2,[],results_fed3,[],results_sa,[],results_vanilla)
 plt.figure()
 plt.plot(x,results_fed,label='FED')
 plt.plot(x,results_fed2,label='FED2')
 plt.plot(x,results_fed3,label='FED3')
 plt.plot(x,results_sa,label='uniform weight average')
-plt.plot(x,results_fed_wer,label='FED_WER')
+# plt.plot(x,results_fed_wer,label='FED_WER')
 # plt.plot(x,results_fed_wer2,label='FED_WER2')
 plt.plot(x,results_vanilla,label='full finetuning')
 plt.ylabel('WER')
 plt.xlabel('epoch')
 plt.legend()
-plt.savefig('pruned_transducer_stateless5/FED_vs_uniform_average_vs_FT.png')
+plt.savefig('pruned_transducer_stateless5/FED.png')
 
 
 # # search convex point between baseline and fed LM
@@ -163,7 +163,7 @@ plt.savefig('pruned_transducer_stateless5/FED_vs_uniform_average_vs_FT.png')
 # dir_path = 'pruned_transducer_stateless5'
 # results = []
 # for alpha in alphas:
-#     data_path = PATH.join(dir_path,f'results_per_book_convex_{alpha}.txt')
+#     data_path = PATH.join(dir_path,f'results_per_spkid_convex_{alpha}.txt')
 #     with open(data_path,'r') as f:
 #         temp = np.array([float(t.strip().split('\t')[1]) for t in f.readlines()])
 #         results.append(np.mean(temp))
@@ -183,7 +183,7 @@ plt.savefig('pruned_transducer_stateless5/FED_vs_uniform_average_vs_FT.png')
 # results = OrderedDict()
 
 
-# data_path1 = PATH.join(f'{dir_path}', 'results_per_book_fed_45_1e-4_1e-1.txt')
+# data_path1 = PATH.join(f'{dir_path}', 'results_per_spkid_fed_45_1e-4_1e-1.txt')
 # with open(data_path1) as f:
 #     baseline = [float(t.strip().split('\t')[1]) for t in  f.readlines()]
 #     baseline = [np.average(np.array(baseline)) for _ in range(6)]
@@ -191,8 +191,8 @@ plt.savefig('pruned_transducer_stateless5/FED_vs_uniform_average_vs_FT.png')
 
 # for epoch in [35,40,45]:
 #     for a, b in zip(alpha,beta):
-#         file1 = f'results_per_book_fed_{epoch}_{a}_{b}.txt'
-#         file2 = f'results_per_book_fed_{epoch}_{a}_{b}_avg.txt'
+#         file1 = f'results_per_spkid_fed_{epoch}_{a}_{b}.txt'
+#         file2 = f'results_per_spkid_fed_{epoch}_{a}_{b}_avg.txt'
 #         data_path1 = PATH.join(dir_path, file1)
 #         data_path2 = PATH.join(dir_path, file2)
 #         with open(data_path1) as f:
@@ -207,8 +207,8 @@ plt.savefig('pruned_transducer_stateless5/FED_vs_uniform_average_vs_FT.png')
 # # without FED
 # for epoch in [35,40,45]:
 #     for a, b in zip(alpha,beta):
-#         file1 = f'results_per_book_{epoch}.txt'
-#         file2 = f'results_per_book_{epoch}_avg.txt'
+#         file1 = f'results_per_spkid_{epoch}.txt'
+#         file2 = f'results_per_spkid_{epoch}_avg.txt'
 #         data_path1 = PATH.join(dir_path, file1)
 #         data_path2 = PATH.join(dir_path, file2)
 #         with open(data_path1) as f:

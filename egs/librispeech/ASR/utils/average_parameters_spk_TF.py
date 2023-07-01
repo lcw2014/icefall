@@ -2,7 +2,7 @@
 
 import torch
 import torch.nn as nn
-from rnn_lm.model import RnnLmModel
+from transformer_lm.model import TransformerLM
 import argparse
 import logging
 import math
@@ -72,7 +72,7 @@ def get_parser():
     parser.add_argument(
         "--exp-dir",
         type=str,
-        default="rnn_lm/exp",
+        default="transformer_lm/exp",
         help="""The experiment dir.
         It specifies the directory where all training related
         files, e.g., checkpoints, logs, etc, are saved
@@ -82,7 +82,7 @@ def get_parser():
     parser.add_argument(
         "--use-fp16",
         type=str2bool,
-        default=True,
+        default=False,
         help="Whether to use half precision training.",
     )
 
@@ -114,23 +114,9 @@ def get_parser():
     )
 
     parser.add_argument(
-        "--embedding-dim",
-        type=int,
-        default=2048,
-        help="Embedding dim of the model",
-    )
-
-    parser.add_argument(
-        "--hidden-dim",
-        type=int,
-        default=2048,
-        help="Hidden dim of the model",
-    )
-
-    parser.add_argument(
         "--num-layers",
         type=int,
-        default=3,
+        default=16,
         help="Number of RNN layers the model",
     )
 
@@ -186,16 +172,23 @@ def get_parser():
     )
 
     parser.add_argument(
-        "--model-paths",
+        "--lm-list",
         type=str,
         help="LM training data",
     )
 
     parser.add_argument(
-        "--alpha",
-        type=float,
-        default=1.0,
-        help="Hidden dim of the model",
+        "--topk",
+        type=int,
+        default=0,
+        help="LM training data",
+    )
+
+    parser.add_argument(
+        "--model-selection",
+        type=bool,
+        default=False,
+        help="LM training data",
     )
 
     return parser
@@ -218,7 +211,12 @@ def get_params() -> AttributeDict:
             "batch_idx_train": 0,
             "log_interval": 200,
             "reset_interval": 2000,
-            "valid_interval": 5000,
+            "valid_interval": 1000,
+            "nhead": 8,
+            "embedding_dim": 768,
+            "encoder_dim": 768,
+            "dim_feedforward": 2048,
+            "dropout": 0.1,
             "env_info": get_env_info(),
         }
     )
@@ -252,8 +250,10 @@ def load_checkpoint_if_available(
     Returns:
       Return None.
     """
+    if params.start_epoch <= 0:
+        return
 
-    filename = id
+    filename = f"transformer_lm/exp_{id}/epoch-{params.start_epoch-1}.pt"
 
     logging.info(f"Loading checkpoint: {filename}")
     saved_params = load_checkpoint(
@@ -298,7 +298,7 @@ def save_checkpoint(
     import os
     if not os.path.exists(params.exp_dir):
         os.makedirs(params.exp_dir)
-    filename = f"{params.exp_dir}/epoch-{params.alpha}.pt"
+    filename = f"{params.exp_dir}/epoch-{params.start_epoch-1}.pt"
     save_checkpoint_impl(
         filename=filename,
         model=model,
@@ -325,22 +325,28 @@ def average_models(params, models, weights):
     device = next(models[0].parameters()).device
 
     # Create a new model with the same structure as the input models
-    avg_model = RnnLmModel(
-            vocab_size=params.vocab_size,
-            embedding_dim=params.embedding_dim,
-            hidden_dim=params.hidden_dim,
-            num_layers=params.num_layers,
-            tie_weights=params.tie_weights,
-            surplus_layer=params.surplus_layer,
-            adapter=params.adapter,
-        )
+    avg_model = TransformerLM(
+        vocab_size=params.vocab_size,
+        d_model=params.encoder_dim,
+        embedding_dim=params.embedding_dim,
+        dim_feedforward=params.dim_feedforward,
+        nhead=params.nhead,
+        num_layers=params.num_layers,
+        tie_weights=params.tie_weights,
+        params=params,
+    )
     for avg_param in avg_model.parameters():
         avg_param.data.fill_(0)
 
     # Copy the weights from each model into the averaged model
-    for model, weight in zip(models, weights):
-        for avg_param, param in zip(avg_model.parameters(), model.parameters()):
-            avg_param.data.add_(weight * param.data)
+    if params.model_selection:
+        for model, weight in zip(models, weights):
+            for avg_param, param in zip(avg_model.parameters(), model.parameters()):
+                avg_param.data.add_(weight * param.data)
+    else:
+        for model, weight in zip(models, weights):
+            for avg_param, param in zip(avg_model.parameters(), model.parameters()):
+                avg_param.data.add_(weight * param.data)
     
     return avg_model
 
@@ -353,28 +359,45 @@ if __name__ == "__main__":
     params = get_params()
     params.update(vars(args))
     device = torch.device("cpu")
+    wer_avg = 0
 
-    model_paths = params.model_paths.split()
+    with open(params.lm_list, 'r') as f:
+        data_id = [txt.strip() for txt in f.readlines()]
+        temp = list()
+        for d in data_id:
+            if float(d.split('\t')[1]) < 100:
+                temp.append(d)
+                wer_avg += float(d.split('\t')[1])
+        data_id = temp
+        data_id = [(e.split('\t')[0], e.split('\t')[1]) for e in data_id]
+        data_id = sorted(data_id, key=lambda x : x[1])
+    wer_avg = wer_avg / len(data_id)
+    if params.topk:
+        data_id = data_id[:params.topk]
+
     models = list()
-    print(model_paths)
-    weights = torch.tensor([params.alpha, 1 - params.alpha]).float()
+    
 
     from copy import deepcopy
-    for did in model_paths:
-        model = RnnLmModel(
+    for did in data_id:
+        model = TransformerLM(
             vocab_size=params.vocab_size,
+            d_model=params.encoder_dim,
             embedding_dim=params.embedding_dim,
-            hidden_dim=params.hidden_dim,
+            dim_feedforward=params.dim_feedforward,
+            nhead=params.nhead,
             num_layers=params.num_layers,
             tie_weights=params.tie_weights,
-            surplus_layer=params.surplus_layer,
-            adapter=params.adapter,
+            params=params,
         )
-        _ = load_checkpoint_if_available(params=params, model=model, id=did)
+        if params.model_selection and float(did[1]) > wer_avg:
+            continue
+        _ = load_checkpoint_if_available(params=params, model=model, id=did[0].replace("userlibri-",""))
 
         model.to(device)
         model.device = device
         models.append(deepcopy(model))
+    weights = torch.ones(len(models)).float() / len(models)
     model = average_models(params, models, weights=weights)
 
     save_checkpoint(
@@ -382,5 +405,3 @@ if __name__ == "__main__":
         model=model,
         optimizer=None,
     )
-    
-    

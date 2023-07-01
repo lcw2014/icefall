@@ -137,29 +137,7 @@ class RnnLmModel(torch.nn.Module):
             rnn_out = rnn_out + adapter_out
 
         logits = self.output_linear(rnn_out)
-
-        # import sys
-
-        # print(x.shape,y.shape,logits.shape,) 
-        # # torch.Size([100, 16]) torch.Size([100, 16]) torch.Size([100, 16, 500])
-        # print(x[0])
-        # print(y[0])
-        # # tensor([  1,  63,  95,  19, 182,  77, 364, 105, 180,  82,  40,  12,   5,  41,
-        # #  28,  77], device='cuda:3')
-        # # tensor([ 63,  95,  19, 182,  77, 364, 105, 180,  82,  40,  12,   5,  41,  28,
-        # #  77,   1], device='cuda:3')
-        # print(logits[0,0,:])
-        # # tensor([-7.3646, -4.5089, -7.3646, -2.6552,  6.3611,  5.0855, -3.5348,  5.3014,
-        # #         -3.9626,  3.2491,  3.9385, -3.1902, -4.0895, -1.9453, -3.7254,  4.8286,
-        # #         -3.0050, -3.7167, -4.0903,  6.3105, -3.8368, -4.3222,  5.9953, -4.1954,
-        # print("########################")
-        # sys.exit()
-
-        # Note: No need to use `log_softmax()` here
-        # since F.cross_entropy() expects unnormalized probabilities
-
-        # nll_loss is of shape (N*L,)
-        # nll -> negative log-likelihood
+        
         nll_loss = F.cross_entropy(
             logits.reshape(-1, self.vocab_size), y.reshape(-1), reduction="none"
         )

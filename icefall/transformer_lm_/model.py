@@ -83,8 +83,7 @@ class TransformerLM(torch.nn.Module):
             return_logits (bool, optional): Return logits instead of NLL
 
         """
-        # batch_size = x.size(0)
-        # assert x_lens.size(0) == batch_size, (x_lens.size(0), batch_size)
+
         x = self.input_embedding(x)
 
         x, x_lens = self.encoder(x, x_lens)
@@ -100,8 +99,6 @@ class TransformerLM(torch.nn.Module):
 
         mask = make_pad_mask(x_lens).reshape(-1)
         nll_loss.masked_fill_(mask, 0)
-
-        # nll_loss = nll_loss.reshape(batch_size, -1)
 
         return nll_loss
 

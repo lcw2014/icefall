@@ -727,6 +727,8 @@ def decode_dataset(
 
     results = defaultdict(list)
     for batch_idx, batch in enumerate(dl):
+        # print(batch)
+        # print(len(batch["supervisions"]["text"]))
         texts = batch["supervisions"]["text"]
         cut_ids = [cut.id for cut in batch["supervisions"]["cut"]]
 
@@ -1039,20 +1041,22 @@ def main():
             test_userlibri_cuts = librispeech.test_userlibri_cuts(tid)
         else:
             test_userlibri_cuts += librispeech.test_userlibri_cuts(tid)
-    if test_userlibri_cuts.__len__() <= 30:
-        args.num_buckets = test_userlibri_cuts.__len__()
-        librispeech = LibriSpeechAsrDataModule(args)
+    # if test_userlibri_cuts.__len__() <= 100:
+    #     args.num_buckets = test_userlibri_cuts.__len__()
+    #     print(args)
+    #     librispeech = LibriSpeechAsrDataModule(args)
 
-        # test_clean_cuts = librispeech.test_clean_cuts()
-        # test_other_cuts = librispeech.test_other_cuts()
-        for i, tid in enumerate(args.test_id.split()):
-            if i == 0:
-                test_userlibri_cuts = librispeech.test_userlibri_cuts(tid)
-            else:
-                test_userlibri_cuts += librispeech.test_userlibri_cuts(tid)
+    #     # test_clean_cuts = librispeech.test_clean_cuts()
+    #     # test_other_cuts = librispeech.test_other_cuts()
+    #     for i, tid in enumerate(args.test_id.split()):
+    #         if i == 0:
+    #             test_userlibri_cuts = librispeech.test_userlibri_cuts(tid)
+    #         else:
+    #             test_userlibri_cuts += librispeech.test_userlibri_cuts(tid)
 
     # test_clean_dl = librispeech.test_dataloaders(test_clean_cuts)
     # test_other_dl = librispeech.test_dataloaders(test_other_cuts)
+    # print(test_userlibri_cuts)
     test_userlibri_dl = librispeech.test_dataloaders(test_userlibri_cuts)
     # valid_cuts = librispeech.dev_clean_cuts()
     # valid_cuts += librispeech.dev_other_cuts()

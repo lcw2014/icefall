@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright    2021  Xiaomi Corp.        (authors: Xiaoyu Yang)
+# Copyright    2021  Xiaomi Corp.        (authors: Fangjun Kuang)
 #
 # See ../../../../LICENSE for clarification regarding multiple authors
 #
@@ -166,6 +166,53 @@ def get_parser():
         help="The seed for random generators intended for reproducibility",
     )
 
+    parser.add_argument(
+        "--train-n-layer",
+        type=int,
+        default=0,
+        help="freeze rnn layer",
+    )
+
+    parser.add_argument(
+        "--surplus-layer",
+        type=bool,
+        default=False,
+        help="add surplus rnn layer to existing rnn layers",
+    )
+
+    parser.add_argument(
+        "--copy-last-layer",
+        type=bool,
+        default=False,
+        help="",
+    )
+
+    parser.add_argument(
+        "--adapter",
+        type=bool,
+        default=False,
+        help="",
+    )
+
+    parser.add_argument(
+        "--save-last-epoch",
+        type=bool,
+        default=False,
+        help="",
+    )
+
+    parser.add_argument(
+        "--lm-data-name",
+        type=str,
+        help="",
+    )
+
+    parser.add_argument(
+        "--lm-data-path",
+        type=str,
+        help="",
+    )
+
     return parser
 
 
@@ -174,7 +221,7 @@ def get_params() -> AttributeDict:
 
     params = AttributeDict(
         {
-            "max_sent_len": 200,
+            "max_sent_len": 90,
             "sos_id": 1,
             "eos_id": 1,
             "blank_id": 0,
@@ -237,16 +284,16 @@ def load_checkpoint_if_available(
         optimizer=optimizer,
         scheduler=scheduler,
     )
-
-    keys = [
-        "best_train_epoch",
-        "best_valid_epoch",
-        "batch_idx_train",
-        "best_train_loss",
-        "best_valid_loss",
-    ]
-    for k in keys:
-        params[k] = saved_params[k]
+    # print(saved_params)
+    # keys = [
+    #     "best_train_epoch",
+    #     "best_valid_epoch",
+    #     "batch_idx_train",
+    #     "best_train_loss",
+    #     "best_valid_loss",
+    # ]
+    # for k in keys:
+    #     params[k] = saved_params[k]
 
     return saved_params
 
@@ -278,13 +325,13 @@ def save_checkpoint(
         rank=rank,
     )
 
-    if params.best_train_epoch == params.cur_epoch:
-        best_train_filename = params.exp_dir / "best-train-loss.pt"
-        copyfile(src=filename, dst=best_train_filename)
+    # if params.best_train_epoch == params.cur_epoch:
+    #     best_train_filename = params.exp_dir / "best-train-loss.pt"
+    #     copyfile(src=filename, dst=best_train_filename)
 
-    if params.best_valid_epoch == params.cur_epoch:
-        best_valid_filename = params.exp_dir / "best-valid-loss.pt"
-        copyfile(src=filename, dst=best_valid_filename)
+    # if params.best_valid_epoch == params.cur_epoch:
+    #     best_valid_filename = params.exp_dir / "best-valid-loss.pt"
+    #     copyfile(src=filename, dst=best_valid_filename)
 
 
 def compute_loss(
@@ -297,7 +344,7 @@ def compute_loss(
     """Compute the negative log-likelihood loss given a model and its input.
     Args:
       model:
-        The NN model,
+        The NN model, e.g., RnnLmModel.
       x:
         A 2-D tensor. Each row contains BPE token IDs for a sentence. Also,
         each row starts with SOS ID.
@@ -406,6 +453,9 @@ def train_one_epoch(
         params.batch_idx_train += 1
         x, y, sentence_lengths = batch
         batch_size = x.size(0)
+        # if x.size(1) == 244:
+        #     print(x[0])
+        # print(batch_size,x.size(),x.size(0) * x.size(1))
         with torch.cuda.amp.autocast(enabled=params.use_fp16):
             loss, loss_info = compute_loss(
                 model=model,
@@ -478,7 +528,12 @@ def train_one_epoch(
     if params.train_loss < params.best_train_loss:
         params.best_train_epoch = params.cur_epoch
         params.best_train_loss = params.train_loss
-
+    
+def train_n_layer(model, args):
+    if args.train_n_layer != 4:
+        for name, param in model.named_parameters():
+            if list(name)[-1] != str(args.train_n_layer - 1):
+                param.requires_grad_(False)
 
 def run(rank, world_size, args):
     """
@@ -532,7 +587,29 @@ def run(rank, world_size, args):
 
     checkpoints = load_checkpoint_if_available(params=params, model=model)
 
+    if params.copy_last_layer:
+        state_dict = model.state_dict()
+        new_state_dict = copy.deepcopy(model.state_dict())
+        for k in state_dict.keys():
+            if list(k)[-1] == str(params.num_layers -1):
+                name = '_'.join(k.split('.')[1].split('_')[0:2])
+                new_state_dict[f'rnn_surplus_layer.{name}_l0'] = state_dict[k]
+        
+        model.load_state_dict(new_state_dict)
+        if args.train_n_layer == 4:
+            for name, param in model.named_parameters():
+                if name.split('.')[0] != 'rnn_surplus_layer':
+                    param.requires_grad_(False)
+    
+    if params.adapter:
+        for n, p in model.named_parameters():
+            if n.split('.')[0] != 'adapter':
+                p.requires_grad_(False)
+
     model.to(device)
+    if params.train_n_layer:
+        train_n_layer(model,args)
+
     if is_distributed:
         model = DDP(model, device_ids=[rank])
 
@@ -543,13 +620,13 @@ def run(rank, world_size, args):
         lr=params.lr,
         weight_decay=params.weight_decay,
     )
-    if checkpoints:
+    if checkpoints.get('optimizer',None):
         logging.info("Load optimizer state_dict from checkpoint")
         optimizer.load_state_dict(checkpoints["optimizer"])
 
-    logging.info(f"Loading LM training data from {params.lm_data}")
-    train_dl = get_dataloader(
-        filename=params.lm_data,
+    logging.info(f"Loading LM training data from {params.lm_data_name}")
+    train_dl = get_dataloader_perid(
+        filename=params.lm_data_name,
         is_distributed=is_distributed,
         params=params,
     )
@@ -577,13 +654,21 @@ def run(rank, world_size, args):
             tb_writer=tb_writer,
             world_size=world_size,
         )
-
-        save_checkpoint(
-            params=params,
-            model=model,
-            optimizer=optimizer,
-            rank=rank,
-        )
+        if params.save_last_epoch:
+            if epoch == params.num_epochs -1:
+                save_checkpoint(
+                    params=params,
+                    model=model,
+                    optimizer=optimizer,
+                    rank=rank,
+                )
+        else:
+            save_checkpoint(
+                params=params,
+                model=model,
+                optimizer=optimizer,
+                rank=rank,
+            )
 
     logging.info("Done!")
 

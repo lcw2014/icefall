@@ -379,6 +379,7 @@ class LibriSpeechAsrDataModule:
             else eval(self.args.input_strategy)(),
             return_cuts=self.args.return_cuts,
         )
+        # print(self.args.max_duration,self.args.num_buckets)
         sampler = DynamicBucketingSampler(
             cuts,
             max_duration=self.args.max_duration,

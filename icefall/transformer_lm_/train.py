@@ -34,13 +34,12 @@ import math
 from pathlib import Path
 from shutil import copyfile
 from typing import Optional, Tuple
-import sys
 
 import torch
 import torch.multiprocessing as mp
 import torch.nn as nn
 import torch.optim as optim
-from dataset import get_dataloader, get_dataloader_perid
+from dataset import get_dataloader
 from lhotse.utils import fix_random_seed
 from model import TransformerLM
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -52,8 +51,6 @@ from icefall.checkpoint import save_checkpoint as save_checkpoint_impl
 from icefall.dist import cleanup_dist, setup_dist
 from icefall.env import get_env_info
 from icefall.utils import AttributeDict, MetricsTracker, setup_logger, str2bool
-
-import copy
 
 
 def get_parser():

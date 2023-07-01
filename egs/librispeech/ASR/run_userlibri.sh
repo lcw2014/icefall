@@ -757,7 +757,7 @@ if [ $stage -le 16 ] && [ $stop_stage -ge 16 ]; then
       --exp-dir rnn_lm/exp_$spk_id \
       --save-last-epoch true \
       --lm-data-path data/lm_training_bpe_500_userlibri \
-      --lm-data-name "$num"
+      --lm-data-name "$spk_id"
       #--lm-data-path data/lm_training_bpe_500_userlibri/sorted_lm_data_$num.pt \
     if [ -f rnn_lm/exp_$spk_id/epoch-30.pt ]; then rm rnn_lm/exp_$spk_id/epoch-30.pt; fi
 
@@ -847,7 +847,7 @@ if [ $stage -le 17 ] && [ $stop_stage -ge 17 ]; then
         --exp-dir rnn_lm/exp_$spk_id \
         --save-last-epoch true \
         --lm-data-path data/lm_training_bpe_500_userlibri \
-        --lm-data-name "$num" \
+        --lm-data-name "$spk_id" \
         --alpha 1e-4 \
         --beta 1e-3
 

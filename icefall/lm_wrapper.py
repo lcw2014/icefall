@@ -57,7 +57,7 @@ class LmScorer(torch.nn.Module):
 
         parser.add_argument(
             "--lm-epoch",
-            type=int,
+            type=str,
             default=7,
             help="""Which epoch to be used
             """,
@@ -172,6 +172,7 @@ class LmScorer(torch.nn.Module):
                 )
                 model.to(device)
             else:
+                params.lm_epoch = int(params.lm_epoch)
                 start = params.lm_epoch - params.lm_avg + 1
                 filenames = []
                 for i in range(start, params.lm_epoch + 1):
